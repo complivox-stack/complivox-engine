@@ -17,7 +17,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom High-End SaaS Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -44,7 +43,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Main Branding Header
 st.markdown("""
 <div class="brand-container">
     <div class="brand-title">🛡️ Complivox Global Regulatory Intelligence Platform</div>
@@ -52,7 +50,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Silent API key load from Secrets
 sarvam_api_key = st.secrets.get("SARVAM_API_KEY", "")
 
 # ==========================================
@@ -157,21 +154,21 @@ def fetch_clinical_evidence(term):
         return "Clinical literature synthesis active via global databases."
 
 # ==========================================
-# 4. ENTERPRISE PDF GENERATOR
+# 4. FIXED ENTERPRISE PDF GENERATOR
 # ==========================================
 class EnterprisePDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 8)
         self.set_text_color(100, 116, 139)
-        self.cell(0, 8, "COMPLIVOX GLOBAL | STATUTORY REGULATORY DOSSIER", ln=True, align="R")
-        self.line(10, 18, 200, 18)
-        self.ln(4)
+        self.cell(0, 6, "COMPLIVOX GLOBAL | STATUTORY REGULATORY ASSESSMENT REPORT", ln=True, align="R")
+        self.line(10, 15, 200, 15)
+        self.ln(3)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(148, 163, 184)
-        self.cell(0, 10, f"Page {self.page_no()}/{{nb}} | Confidential Regulatory Submission Document", align="C")
+        self.cell(0, 10, f"Page {self.page_no()}/{{nb}} | Confidential Statutory Dossier", align="C")
 
 def build_pdf_document(product, jurisdiction, intent, content):
     pdf = EnterprisePDF()
@@ -179,20 +176,29 @@ def build_pdf_document(product, jurisdiction, intent, content):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    pdf.set_font("Helvetica", "B", 13)
+    # Title Section
+    pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(15, 23, 42)
     clean_product = product.encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 8, f"Regulatory Assessment Report: {clean_product}", ln=True)
+    pdf.cell(0, 7, f"Regulatory Dossier: {clean_product}", ln=True)
     
-    pdf.set_font("Helvetica", "I", 9)
+    # Clean Metadata Multi-lines (No Overlap)
+    pdf.set_font("Helvetica", "B", 8.5)
     pdf.set_text_color(71, 85, 105)
-    clean_meta = f"Jurisdiction: {jurisdiction} | Filing Intent: {intent}".encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 5, clean_meta, ln=True)
+    clean_jur = f"Authority: {jurisdiction}".encode('latin-1', 'replace').decode('latin-1')
+    pdf.cell(0, 5, clean_jur, ln=True)
     
-    clean_date = f"Generated On: {datetime.now().strftime('%d %B %Y')} | Standard: Zero Data Retention".encode('latin-1', 'replace').decode('latin-1')
+    clean_intent = f"Filing Intent: {intent}".encode('latin-1', 'replace').decode('latin-1')
+    pdf.cell(0, 5, clean_intent, ln=True)
+    
+    pdf.set_font("Helvetica", "I", 8)
+    clean_date = f"Assessment Date: {datetime.now().strftime('%d %B %Y')} | Standard: Zero Data Retention".encode('latin-1', 'replace').decode('latin-1')
     pdf.cell(0, 5, clean_date, ln=True)
+    
+    pdf.line(10, pdf.get_y() + 2, 200, pdf.get_y() + 2)
     pdf.ln(5)
     
+    # Clean Body Text
     clean_text = content.replace("###", "").replace("##", "").replace("**", "").replace("–", "-").replace("—", "-").replace("“", '"').replace("”", '"').replace("’", "'").replace("•", "-")
     clean_body = clean_text.encode('latin-1', 'replace').decode('latin-1')
     
@@ -279,6 +285,10 @@ with col_dossier:
                 - SUGAM 3.0 Online Submission Guidelines & PSUR Module
                 {statutory_kb}
 
+                CRITICAL OUTPUT DIRECTIVE:
+                - Do NOT include any introductory greetings, meta-headers like 'Prepared by', 'Date', or 'Product Overview' at the top.
+                - Start directly with '1. STATUTORY CLASSIFICATION & EXACT LEGAL CLAUSES'.
+
                 Generate a complete, audit-ready Regulatory Strategy Dossier strictly covering:
                 1. STATUTORY CLASSIFICATION & EXACT LEGAL CLAUSES (Class A-D, Exact MDR 2017 Rules, Schedule M/Part IV-A).
                 2. TRANSACTION WORKFLOW & STATUTORY FORMS (Exact Forms: MD-14/15 for Import, MD-7/8/9/10 for Mfg, PMF/DMF checklists, Free Sale Certificate).
@@ -328,7 +338,6 @@ with col_dossier:
                 except Exception as e:
                     st.error(f"❌ Connection Error: {str(e)}")
 
-    # Show Output and PDF Export Button only when dossier is ready
     if st.session_state.get("dossier_text"):
         st.markdown(st.session_state["dossier_text"])
         
@@ -340,10 +349,11 @@ with col_dossier:
                 st.session_state["dossier_text"]
             )
             
+            clean_safe_name = st.session_state.get('prod_name', 'Report').replace(' ', '_')
             st.download_button(
                 label="📥 Export Audit-Ready Regulatory Dossier (PDF)",
                 data=pdf_bytes,
-                file_name=f"Complivox_Dossier_{st.session_state.get('prod_name', 'Report').replace(' ', '_')}.pdf",
+                file_name=f"Complivox_Regulatory_Dossier_{clean_safe_name}_{datetime.now().strftime('%d%b%Y')}.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
