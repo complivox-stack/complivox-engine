@@ -15,10 +15,8 @@ st.set_page_config(
 # Custom UI Styling
 st.markdown("""
     <style>
-    .main-header { font-size: 30px; font-weight: 800; color: #0F172A; margin-bottom: 2px; }
-    .sub-header { font-size: 15px; color: #475569; margin-bottom: 20px; }
-    .status-badge { background-color: #EEF2FF; color: #3730A3; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 12px; }
-    .metric-card { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .main-header { font-size: 28px; font-weight: 800; color: #0F172A; margin-bottom: 2px; }
+    .sub-header { font-size: 14px; color: #475569; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -27,7 +25,6 @@ st.markdown('<div class="sub-header">AI-Powered Regulatory Dossier Generation, S
 
 # Sidebar Controls
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/shield.png", width=60)
     st.header("⚙️ Configuration")
     sarvam_api_key = st.text_input("Sarvam AI API Key", type="password", placeholder="Enter API Key")
     
@@ -103,7 +100,7 @@ def retrieve_pubmed_clinical_trials(query_term):
         for uid in uids:
             if uid in summary_res:
                 data = summary_res[uid]
-                citations.append(f"• Title: {data.get('title', '')} | Source: {data.get('source', '')} ({data.get('pubdate', '')})")
+                citations.append(f"- Title: {data.get('title', '')} | Source: {data.get('source', '')} ({data.get('pubdate', '')})")
         return "\n".join(citations)
     except Exception as err:
         return f"Clinical Search Pipeline Warning: {str(err)}"
@@ -125,10 +122,10 @@ with col_output:
                 You are an authoritative Global Regulatory Affairs Director and Subject Matter Expert across CDSCO (India MDR 2017), US FDA (21 CFR), and EU MDR (2017/745).
                 Target Regulatory Framework: {target_jurisdiction}.
 
-                Generate a publication-grade, professional Regulatory Assessment Dossier. You MUST structure the report under these exact standardized headings:
+                Generate a publication-grade, professional Regulatory Assessment Dossier structured under these standardized headings:
                 
                 1. EXECUTIVE REGULATORY CLASSIFICATION & STATUTORY PATHWAY
-                   - Statutory Risk Classification (Class A, B, C, or D) with exact Rule citations.
+                   - Risk Classification (Class A, B, C, or D) with exact Rule citations.
                    - Statutory Pathway and Primary Licensing Authority.
                 
                 2. SUBSTANTIAL EQUIVALENCE & PREDICATE BENCHMARKING
@@ -176,7 +173,7 @@ with col_output:
                 try:
                     resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=100)
                     if resp.status_code == 200:
-                        report_body = resp.json()["choices"][0]["message"]["content"]
+                        report_body = str(resp.json()["choices"][0]["message"]["content"])
                         st.session_state["report_body"] = report_body
                         st.session_state["active_prod"] = product_name
                         st.session_state["active_jur"] = target_jurisdiction
@@ -185,42 +182,34 @@ with col_output:
                 except Exception as ex:
                     st.error(f"Execution Error: {str(ex)}")
 
-    if "report_body" in st.session_state:
+    if "report_body" in st.session_state and st.session_state["report_body"]:
         st.markdown(st.session_state["report_body"])
         
-        # PDF Dossier Generator
-        class PDFReport(FPDF):
-            def header(self):
-                self.set_font('Helvetica', 'B', 12)
-                self.cell(0, 10, 'COMPLIVOX GLOBAL REGULATORY INTELLIGENCE DOSSIER', border=False, ln=True, align='L')
-                self.set_draw_color(200, 200, 200)
-                self.line(10, 18, 200, 18)
-                self.ln(5)
+        # PDF Generation
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Helvetica", "B", 14)
+            pdf.cell(0, 10, f"Complivox Regulatory Dossier: {st.session_state.get('active_prod', 'Product')}", ln=True, align="L")
+            pdf.set_font("Helvetica", "I", 10)
+            pdf.cell(0, 6, f"Framework: {st.session_state.get('active_jur', 'Regulatory')} | Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True)
+            pdf.ln(5)
             
-            def footer(self):
-                self.set_y(-15)
-                self.set_font('Helvetica', 'I', 8)
-                self.cell(0, 10, f'Confidential | Generated via Complivox Engine | Page {self.page_no()}', align='C')
-
-        pdf = PDFReport()
-        pdf.add_page()
-        pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 8, f"Product Assessment: {st.session_state['active_prod']}", ln=True)
-        pdf.set_font("Helvetica", "I", 10)
-        pdf.cell(0, 6, f"Jurisdiction: {st.session_state['active_jur']} | Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True)
-        pdf.ln(6)
-        
-        pdf.set_font("Helvetica", "", 9)
-        sanitized_text = st.session_state["report_body"].encode('latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(0, 5.5, sanitized_text)
-        
-        pdf_bytes = bytes(pdf.output())
-        st.download_button(
-            label="📥 Export Regulatory Dossier (PDF)",
-            data=pdf_bytes,
-            file_name=f"{st.session_state['active_prod'].replace(' ', '_')}_Complivox_Dossier.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+            pdf.set_font("Helvetica", "", 9)
+            raw_text = str(st.session_state["report_body"])
+            sanitized_text = raw_text.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 5, sanitized_text)
+            
+            pdf_data = bytes(pdf.output())
+            
+            st.download_button(
+                label="📥 Export Regulatory Dossier (PDF)",
+                data=pdf_data,
+                file_name=f"{st.session_state.get('active_prod', 'Dossier').replace(' ', '_')}_Report.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.warning("PDF generation notice: View full dossier on screen.")
     else:
         st.info("👈 Complete the product specification profile on the left and click 'Execute Global Regulatory Analysis' to generate the technical dossier.")
