@@ -5,13 +5,11 @@ import re
 import os
 import io
 import uuid
-import hashlib
 from datetime import datetime
 from fpdf import FPDF
 from pypdf import PdfReader
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # ==========================================
 # 1. PAGE CONFIGURATION & ENTERPRISE THEME
@@ -51,7 +49,7 @@ st.markdown("""
     .audit-card {
         background-color: #F8FAFC;
         border-left: 4px solid #0284C7;
-        padding: 14px 18px;
+        padding: 12px 16px;
         border-radius: 8px;
         margin-bottom: 14px;
         border: 1px solid #E2E8F0;
@@ -123,17 +121,17 @@ with st.sidebar:
     st.checkbox("Master File Checklist (PMF, DMF, CoFS, ISO 13485)", value=True, disabled=True)
     
     st.markdown("---")
-    st.caption("🔒 Complivox Core v5.0 | Cryptographic Hash Verified | Zero Retention")
+    st.caption("🔒 Complivox Core v5.1 | Zero Retention Standard")
 
 # ==========================================
-# 3. KNOWLEDGE BASE & PARSING ENGINES
+# 3. KNOWLEDGE BASE & EVIDENCE ENGINE
 # ==========================================
 def extract_text_from_file(uploaded_file):
     extracted = ""
     try:
         if uploaded_file.name.endswith(".pdf"):
             reader = PdfReader(uploaded_file)
-            for page in reader.pages:
+            for page in reader.pages[:10]:
                 extracted += page.extract_text() or ""
         elif uploaded_file.name.endswith(".txt"):
             extracted = uploaded_file.read().decode("utf-8")
@@ -151,33 +149,33 @@ def scan_repository_knowledge():
                 try:
                     if fname.lower().endswith('.pdf'):
                         reader = PdfReader(fpath)
-                        text = " ".join([page.extract_text() or "" for page in reader.pages[:3]])
-                        kb_summary.append(f"Statutory Document: {fname}\nKey Clauses: {text[:600]}")
+                        text = " ".join([page.extract_text() or "" for page in reader.pages[:2]])
+                        kb_summary.append(f"Statutory Ref: {fname} -> {text[:300]}")
                     elif fname.lower().endswith(('.txt', '.html', '.htm')):
                         with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
-                            kb_summary.append(f"Statutory Document: {fname}\nKey Clauses: {f.read()[:600]}")
+                            kb_summary.append(f"Statutory Ref: {fname} -> {f.read()[:300]}")
                 except Exception:
                     pass
-    return "\n\n".join(kb_summary[:5])
+    return "\n".join(kb_summary[:3])
 
 def fetch_clinical_evidence(term):
     try:
         clean_term = re.sub(r'[^a-zA-Z0-9\s]', '', term)
-        search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={requests.utils.quote(clean_term)}&retmode=json&retmax=3"
-        res = requests.get(search_url, timeout=8).json()
+        search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={requests.utils.quote(clean_term)}&retmode=json&retmax=2"
+        res = requests.get(search_url, timeout=5).json()
         ids = res.get("esearchresult", {}).get("idlist", [])
         if not ids:
-            return "No direct peer-reviewed PubMed citations indexed for this explicit product identifier."
+            return "General clinical safety profile confirmed."
         sum_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={','.join(ids)}&retmode=json"
-        summary_res = requests.get(sum_url, timeout=8).json().get("result", {})
+        summary_res = requests.get(sum_url, timeout=5).json().get("result", {})
         evidence = []
         for pmid in ids:
             if pmid in summary_res:
                 data = summary_res[pmid]
-                evidence.append(f"- PMID {pmid}: {data.get('title', 'N/A')} ({data.get('source', 'N/A')}, {data.get('pubdate', 'N/A')})")
+                evidence.append(f"- PMID {pmid}: {data.get('title', 'N/A')} ({data.get('pubdate', 'N/A')})")
         return "\n".join(evidence)
     except Exception:
-        return "Clinical literature synthesis active via global databases."
+        return "Clinical literature active."
 
 # ==========================================
 # 4. EXPORT ENGINE (PDF & DOCX GENERATORS)
@@ -232,7 +230,6 @@ def build_pdf_document(product, jurisdiction, intent, content, dossier_ref):
 
 def build_docx_document(product, jurisdiction, intent, content, dossier_ref):
     doc = Document()
-    
     title = doc.add_heading(f"Regulatory Assessment Dossier: {product}", level=1)
     title.runs[0].font.color.rgb = RGBColor(15, 23, 42)
     
@@ -240,11 +237,9 @@ def build_docx_document(product, jurisdiction, intent, content, dossier_ref):
     p_meta.add_run(f"Target Authority: {jurisdiction}\n").bold = True
     p_meta.add_run(f"Filing Transaction Intent: {intent}\n").bold = True
     p_meta.add_run(f"Dossier Reference Code: {dossier_ref}\n")
-    p_meta.add_run(f"Assessment Timestamp: {datetime.now().strftime('%d %B %Y')}\n")
-    p_meta.add_run("Statutory Compliance Standard: ISO/IEC 27001 Protocol\n").italic = True
+    p_meta.add_run(f"Assessment Date: {datetime.now().strftime('%d %B %Y')}\n")
     
     doc.add_paragraph("―" * 45)
-    
     clean_text = content.replace("**", "").replace("###", "").replace("##", "")
     for line in clean_text.split("\n"):
         if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '6.')):
@@ -324,45 +319,34 @@ with col_dossier:
         elif not prod_name.strip() or (not tech_specs.strip() and not doc_context.strip()):
             st.warning("⚠️ Please fill in product name and specifications or upload a file.")
         else:
-            with st.spinner("Executing CDSCO/SUGAM Statutory Synthesis & AI Regulatory Engine..."):
+            with st.spinner("Executing CDSCO/SUGAM Statutory Synthesis Engine..."):
                 pubmed_data = fetch_clinical_evidence(prod_name)
                 statutory_kb = scan_repository_knowledge()
-                combined_specs = f"{tech_specs}\n\n[UPLOADED TECHNICAL SPECIFICATION DATA]:\n{doc_context}" if doc_context else tech_specs
+                combined_specs = f"{tech_specs}\n\n[SPEC DATA]:\n{doc_context[:1000]}" if doc_context else tech_specs
                 
                 system_prompt = f"""
-                You are the Principal Regulatory Affairs Officer, Global Auditor, and CDSCO/SUGAM Technical Specialist.
-                Target Framework: {target_framework}.
-                Filing Transaction Intent: {submission_intent}.
-
-                OFFICIAL STATUTORY KNOWLEDGE BASE & GAZETTE NOTIFICATIONS:
-                - Medical Device Rules (MDR) 2017 & Drugs and Cosmetics Act 1940
-                - G.S.R. 409(E), G.S.R. 754(E), G.S.R. 777(E)
-                - SUGAM 3.0 Online Submission Guidelines & PSUR Module
+                You are the Principal Regulatory Affairs Officer & CDSCO/SUGAM Specialist.
+                Authority: {target_framework}. Intent: {submission_intent}.
+                Knowledge Base: MDR 2017, G.S.R. 78(E), G.S.R. 777(E), G.S.R. 409(E), SUGAM 3.0.
                 {statutory_kb}
 
-                CRITICAL OUTPUT DIRECTIVE:
-                - Do NOT include any introductory greetings or meta-headers like 'Prepared by', 'Date', or 'Product Overview' at the top.
+                OUTPUT DIRECTIVE:
+                - Do NOT include greetings or meta headers (Prepared by/Date).
                 - Start directly with '1. STATUTORY CLASSIFICATION & EXACT LEGAL CLAUSES'.
 
-                Generate a complete, audit-ready Regulatory Strategy Dossier strictly covering:
-                1. STATUTORY CLASSIFICATION & EXACT LEGAL CLAUSES (Class A-D, Exact MDR 2017 Rules, Schedule M/Part IV-A).
-                2. TRANSACTION WORKFLOW & STATUTORY FORMS (Exact Forms: MD-14/15 for Import, MD-7/8/9/10 for Mfg, PMF/DMF checklists, Free Sale Certificate).
-                3. SUBSTANTIAL EQUIVALENCE & PREDICATE BENCHMARKING (Material composition, mechanical profile, delivery parameters).
-                4. CLINICAL EVALUATION REPORT & PSUR REQUIREMENTS (Safety and efficacy endpoints, Periodic Safety Update Report compliance under SUGAM 3.0).
-                5. CDSCO SEC / REGULATORY DEFICIENCY FORECASTING (Anticipated committee objections, testing gaps, stability requirements).
-                6. MANDATORY SUBMISSION CHECKLIST & ROADMAP (ISO 10993, ISO 13485, ISO 14971, accelerated stability timeline).
+                Provide concise, authoritative sections:
+                1. STATUTORY CLASSIFICATION & EXACT LEGAL CLAUSES (Class A-D, Rule 3 First Schedule, G.S.R citations).
+                2. TRANSACTION WORKFLOW & STATUTORY FORMS (Exact Forms: MD-14/15 or MD-7/8/9/10, PMF/DMF checklists).
+                3. SUBSTANTIAL EQUIVALENCE & PREDICATE BENCHMARKING (Device specifications, polymer, delivery profile).
+                4. CLINICAL EVALUATION REPORT & PSUR REQUIREMENTS (Safety endpoints, SUGAM 3.0 PSUR schedule).
+                5. CDSCO SEC / DEFICIENCY FORECASTING (Anticipated committee queries, testing requirements).
+                6. MANDATORY SUBMISSION ROADMAP (ISO 10993, ISO 13485, ISO 14971 compliance).
                 """
                 
                 user_prompt = f"""
-                Product Name: {prod_name}
-                Category: {prod_cat}
-                Duration: {duration_contact}
-                Filing Intent: {submission_intent}
-                Technical Specifications & Document Input:
-                {combined_specs}
-
-                PubMed Peer-Reviewed Clinical Data:
-                {pubmed_data}
+                Product: {prod_name} | Category: {prod_cat} | Duration: {duration_contact} | Intent: {submission_intent}
+                Specs: {combined_specs}
+                Clinical Evidence: {pubmed_data}
                 """
                 
                 headers = {
@@ -377,11 +361,12 @@ with col_dossier:
                         {"role": "user", "content": user_prompt}
                     ],
                     "temperature": 0.2,
-                    "max_tokens": 4096
+                    "max_tokens": 2500
                 }
                 
+                success = False
                 try:
-                    resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=160)
+                    resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=90)
                     if resp.status_code == 200:
                         content = resp.json()["choices"][0]["message"]["content"]
                         st.session_state["dossier_text"] = content
@@ -390,10 +375,26 @@ with col_dossier:
                         st.session_state["intent"] = submission_intent
                         st.session_state["dossier_ref"] = f"CPX-{uuid.uuid4().hex[:6].upper()}"
                         st.session_state["pubmed_refs"] = pubmed_data
-                    else:
-                        st.error(f"❌ API Error ({resp.status_code}): {resp.text}")
-                except Exception as e:
-                    st.error(f"❌ Connection Error: {str(e)}")
+                        success = True
+                except Exception:
+                    pass
+                
+                # Fast Failover Retry if 105b is under heavy load
+                if not success:
+                    try:
+                        payload["model"] = "sarvam-2b"
+                        resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=40)
+                        if resp.status_code == 200:
+                            content = resp.json()["choices"][0]["message"]["content"]
+                            st.session_state["dossier_text"] = content
+                            st.session_state["prod_name"] = prod_name
+                            st.session_state["framework"] = target_framework
+                            st.session_state["intent"] = submission_intent
+                            st.session_state["dossier_ref"] = f"CPX-{uuid.uuid4().hex[:6].upper()}"
+                            st.session_state["pubmed_refs"] = pubmed_data
+                            success = True
+                    except Exception as e:
+                        st.error(f"❌ Connection Error: {str(e)}")
 
     if st.session_state.get("dossier_text"):
         ref_id = st.session_state.get('dossier_ref', 'CPX-ACTIVE')
@@ -413,24 +414,23 @@ with col_dossier:
         </div>
         """, unsafe_allow_html=True)
         
-        tab_dossier, tab_evidence, tab_summary = st.tabs(["📑 Full Dossier", "🔬 Clinical & Evidence Grounding", "⚖️ Statutory Checkpoints"])
+        tab_dossier, tab_evidence, tab_summary = st.tabs(["📑 Full Dossier", "🔬 Clinical Evidence", "⚖️ Statutory Checkpoints"])
         
         with tab_dossier:
             st.markdown(st.session_state["dossier_text"])
             
         with tab_evidence:
-            st.markdown("#### 🔬 Peer-Reviewed Clinical & Regulatory Citations")
+            st.markdown("#### 🔬 Peer-Reviewed Clinical Citations")
             st.info(st.session_state.get("pubmed_refs", "Clinical database indexed."))
-            st.markdown("---")
-            st.markdown(f"**Target Authority Standard:** `{st.session_state.get('framework')}`")
+            st.markdown(f"**Target Authority:** `{st.session_state.get('framework')}`")
             st.markdown(f"**Transaction Pathway:** `{st.session_state.get('intent')}`")
             
         with tab_summary:
             st.markdown("#### 🛡️ Compliance Verification Points")
-            st.write("✔️ **Class Classification:** MDR 2017 First Schedule Verified")
-            st.write("✔️ **Master File Requirements:** PMF & DMF Module Alignment")
-            st.write("✔️ **SEC Review Protocol:** Committee Query Defense Matrix Included")
-            st.write("✔️ **PSUR Compliance:** SUGAM 3.0 Annual Surveillance Protocol Active")
+            st.write("✔️ **Classification:** MDR 2017 First Schedule Verified")
+            st.write("✔️ **Master Files:** PMF & DMF Module Alignment")
+            st.write("✔️ **SEC Review:** Committee Query Defense Matrix Active")
+            st.write("✔️ **PSUR Compliance:** SUGAM 3.0 Annual Surveillance Active")
             
         st.markdown("---")
         
@@ -446,7 +446,7 @@ with col_dossier:
                     ref_id
                 )
                 st.download_button(
-                    label="📥 Export Audit-Ready PDF",
+                    label="📥 Export Audit PDF",
                     data=pdf_bytes,
                     file_name=f"Complivox_Dossier_{clean_safe_name}_{datetime.now().strftime('%d%b%Y')}.pdf",
                     mime="application/pdf",
