@@ -4,6 +4,7 @@ import json
 import re
 from datetime import datetime
 from fpdf import FPDF
+from pypdf import PdfReader
 
 # ==========================================
 # PAGE CONFIGURATION & ENTERPRISE BRANDING
@@ -66,6 +67,21 @@ with st.sidebar:
     st.checkbox("SEC Deficiency & Query Forecasting", value=True, disabled=True)
     st.checkbox("Statutory Checklist (MD Forms / eCTD)", value=True, disabled=True)
 
+# Helper: Extract text from PDF/TXT uploads
+def extract_text_from_file(uploaded_file):
+    extracted = ""
+    try:
+        if uploaded_file.name.endswith(".pdf"):
+            reader = PdfReader(uploaded_file)
+            for page in reader.pages:
+                extracted += page.extract_text() or ""
+        elif uploaded_file.name.endswith(".txt"):
+            extracted = uploaded_file.read().decode("utf-8")
+    except Exception as e:
+        st.error(f"Error reading file: {str(e)}")
+    return extracted.strip()
+
+# PubMed Clinical Search
 def fetch_clinical_evidence(term):
     try:
         clean_term = re.sub(r'[^a-zA-Z0-9\s]', '', term)
@@ -85,6 +101,7 @@ def fetch_clinical_evidence(term):
     except Exception as e:
         return "Literature synthesis fallback mode active."
 
+# Robust PDF Generator
 class EnterprisePDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 8)
@@ -116,7 +133,6 @@ def build_pdf_document(product, jurisdiction, content):
     pdf.cell(0, 5, f"Framework: {clean_jur} | Date: {datetime.now().strftime('%d %b %Y')}", ln=True)
     pdf.ln(5)
     
-    # Clean text: remove markdown artifacts for polished PDF printing
     clean_text = content.replace("###", "").replace("##", "").replace("**", "").replace("–", "-").replace("—", "-").replace("“", '"').replace("”", '"').replace("’", "'").replace("•", "-")
     clean_body = clean_text.encode('latin-1', 'replace').decode('latin-1')
     
@@ -125,13 +141,20 @@ def build_pdf_document(product, jurisdiction, content):
     pdf.multi_cell(0, 5, clean_body)
     return bytes(pdf.output())
 
-# Main Interface
+# Main Layout
 col_spec, col_dossier = st.columns([1, 1], gap="large")
 
 with col_spec:
     st.markdown("#### 📋 Technical Submission Dossier")
     
     prod_name = st.text_input("Product / Molecule / Trade Name", value="Sirolimus-Eluting Coronary Stent")
+    
+    # 📂 File Uploader Integration
+    uploaded_file = st.file_uploader("📂 Upload Technical Spec Sheet or Lab Report (PDF / TXT)", type=["pdf", "txt"])
+    doc_context = ""
+    if uploaded_file is not None:
+        doc_context = extract_text_from_file(uploaded_file)
+        st.success(f"✅ Extracted {len(doc_context)} characters from {uploaded_file.name}")
     
     c1, c2 = st.columns(2)
     with c1:
@@ -155,7 +178,7 @@ with col_spec:
     tech_specs = st.text_area(
         "Technical Composition & Clinical Indication",
         value="Cobalt-Chromium L605 platform, strut thickness 65 microns, coated with biodegradable PLGA polymer and Sirolimus (1.4 mcg/mm2) for treatment of de novo native coronary artery lesions.",
-        height=180
+        height=140
     )
     
     exec_btn = st.button("🚀 Synthesize Global Regulatory Dossier", type="primary", use_container_width=True)
@@ -166,11 +189,14 @@ with col_dossier:
     if exec_btn:
         if not sarvam_api_key:
             st.error("⚠️ API Key Missing: Enter key in sidebar or save in Secrets.")
-        elif not prod_name.strip() or not tech_specs.strip():
-            st.warning("⚠️ Please fill in all required fields.")
+        elif not prod_name.strip() or (not tech_specs.strip() and not doc_context.strip()):
+            st.warning("⚠️ Please provide product specifications or upload a file.")
         else:
             with st.spinner("Executing Full Clinical Synthesis & AI Regulatory Engine..."):
                 pubmed_data = fetch_clinical_evidence(prod_name)
+                
+                # Combine manual input + uploaded document content
+                combined_specs = f"{tech_specs}\n\n[UPLOADED TECHNICAL SPECIFICATION DATA]:\n{doc_context}" if doc_context else tech_specs
                 
                 system_prompt = f"""
                 You are the Principal Regulatory Affairs Officer across CDSCO (India MDR 2017), US FDA (21 CFR), and EU MDR (2017/745).
@@ -189,7 +215,8 @@ with col_dossier:
                 Device / Molecule: {prod_name}
                 Category: {prod_cat}
                 Duration: {duration_contact}
-                Technical Specifications: {tech_specs}
+                Technical Specifications & Document Details:
+                {combined_specs}
 
                 PubMed Clinical Findings:
                 {pubmed_data}
