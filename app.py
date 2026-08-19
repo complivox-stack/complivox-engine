@@ -15,7 +15,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom SaaS Styling
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -39,7 +38,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Key retrieval (Secrets or Direct Fallback)
 sarvam_api_key = st.secrets.get("SARVAM_API_KEY", "")
 
 with st.sidebar:
@@ -55,7 +53,6 @@ with st.sidebar:
     )
     
     st.markdown("---")
-    # Manual key entry if secrets not loaded
     if not sarvam_api_key:
         sarvam_api_key = st.text_input("🔑 Sarvam AI API Key", type="password", placeholder="Enter your key here")
     else:
@@ -69,7 +66,6 @@ with st.sidebar:
     st.checkbox("SEC Deficiency & Query Forecasting", value=True, disabled=True)
     st.checkbox("Statutory Checklist (MD Forms / eCTD)", value=True, disabled=True)
 
-# PubMed Clinical Search
 def fetch_clinical_evidence(term):
     try:
         clean_term = re.sub(r'[^a-zA-Z0-9\s]', '', term)
@@ -87,9 +83,8 @@ def fetch_clinical_evidence(term):
                 evidence.append(f"- PMID {pmid}: {data.get('title', 'N/A')} ({data.get('source', 'N/A')}, {data.get('pubdate', 'N/A')})")
         return "\n".join(evidence)
     except Exception as e:
-        return f"Literature synthesis fallback mode active."
+        return "Literature synthesis fallback mode active."
 
-# Robust PDF Generator
 class EnterprisePDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 8)
@@ -102,10 +97,11 @@ class EnterprisePDF(FPDF):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(148, 163, 184)
-        self.cell(0, 10, f"Page {self.page_no()} | Confidential Regulatory Assessment", align="C")
+        self.cell(0, 10, f"Page {self.page_no()}/{{nb}} | Confidential Regulatory Assessment", align="C")
 
 def build_pdf_document(product, jurisdiction, content):
     pdf = EnterprisePDF()
+    pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
@@ -120,16 +116,16 @@ def build_pdf_document(product, jurisdiction, content):
     pdf.cell(0, 5, f"Framework: {clean_jur} | Date: {datetime.now().strftime('%d %b %Y')}", ln=True)
     pdf.ln(5)
     
-    pdf.set_font("Helvetica", "", 8.5)
-    pdf.set_text_color(30, 41, 59)
-    
-    clean_text = content.replace("–", "-").replace("—", "-").replace("“", '"').replace("”", '"').replace("’", "'").replace("•", "-")
+    # Clean text: remove markdown artifacts for polished PDF printing
+    clean_text = content.replace("###", "").replace("##", "").replace("**", "").replace("–", "-").replace("—", "-").replace("“", '"').replace("”", '"').replace("’", "'").replace("•", "-")
     clean_body = clean_text.encode('latin-1', 'replace').decode('latin-1')
     
-    pdf.multi_cell(0, 4.5, clean_body)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(30, 41, 59)
+    pdf.multi_cell(0, 5, clean_body)
     return bytes(pdf.output())
 
-# Main Interface Columns
+# Main Interface
 col_spec, col_dossier = st.columns([1, 1], gap="large")
 
 with col_spec:
@@ -169,18 +165,18 @@ with col_dossier:
     
     if exec_btn:
         if not sarvam_api_key:
-            st.error("⚠️ API Key Missing: Please enter your Sarvam API Key in the sidebar or save it in Streamlit Secrets.")
+            st.error("⚠️ API Key Missing: Enter key in sidebar or save in Secrets.")
         elif not prod_name.strip() or not tech_specs.strip():
-            st.warning("⚠️ Please fill in all required product fields.")
+            st.warning("⚠️ Please fill in all required fields.")
         else:
-            with st.spinner("Executing Clinical Evidence Synthesis & AI Regulatory Engine..."):
+            with st.spinner("Executing Full Clinical Synthesis & AI Regulatory Engine..."):
                 pubmed_data = fetch_clinical_evidence(prod_name)
                 
                 system_prompt = f"""
                 You are the Principal Regulatory Affairs Officer across CDSCO (India MDR 2017), US FDA (21 CFR), and EU MDR (2017/745).
                 Target Framework: {target_framework}.
 
-                Generate an exhaustive, audit-ready Regulatory Strategy Dossier covering:
+                Generate a complete, exhaustive Regulatory Strategy Dossier covering all 6 sections thoroughly:
                 1. STATUTORY CLASSIFICATION & REGULATORY PATHWAY (Class A-D, Exact MDR Rules, Statutory Approval route).
                 2. SUBSTANTIAL EQUIVALENCE & PREDICATE BENCHMARKING (Material, mechanical and delivery parameters).
                 3. CLINICAL EVALUATION REPORT (CER) SYNTHESIS (Safety and clinical efficacy endpoints).
@@ -210,14 +206,14 @@ with col_dossier:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "temperature": 0.2
+                    "temperature": 0.2,
+                    "max_tokens": 4096
                 }
                 
                 try:
-                    resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=120)
+                    resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=160)
                     if resp.status_code == 200:
-                        res_json = resp.json()
-                        content = res_json["choices"][0]["message"]["content"]
+                        content = resp.json()["choices"][0]["message"]["content"]
                         st.session_state["dossier_text"] = content
                         st.session_state["prod_name"] = prod_name
                         st.session_state["framework"] = target_framework
@@ -226,7 +222,6 @@ with col_dossier:
                 except Exception as e:
                     st.error(f"❌ Connection Error: {str(e)}")
 
-    # ONLY SHOW DOSSIER & PDF BUTTON IF CONTENT ACTUALLY EXISTS
     if st.session_state.get("dossier_text"):
         st.markdown(st.session_state["dossier_text"])
         
