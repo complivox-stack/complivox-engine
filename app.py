@@ -41,14 +41,6 @@ st.markdown("""
         letter-spacing: 0.3px;
         transition: all 0.2s ease-in-out;
     }
-    .status-badge {
-        padding: 4px 10px;
-        background: #10B981;
-        color: white;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 600;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,9 +65,14 @@ with st.sidebar:
         "Regulatory Target Authority",
         [
             "CDSCO (India - Medical Device Rules 2017 & SUGAM)",
-            "US FDA (United States - 510(k) Premarket / PMA)",
-            "EU MDR (European Union - Regulation 2017/745)",
-            "Pharma CTD / eCTD (ICH Quality, Safety & Efficacy)"
+            "US FDA (United States - 510(k) Premarket / PMA / 21 CFR)",
+            "EU MDR / IVDR (European Union - Regulation 2017/745 & 746)",
+            "UK MHRA (United Kingdom - UKCA Mark & MDR 2002)",
+            "Health Canada (Canada - MDR SOR/98-282)",
+            "TGA Australia (Therapeutic Goods Administration - ARTG)",
+            "Saudi SFDA (Middle East / GCC - Medical Device Guidance)",
+            "Pharma CTD / eCTD (ICH M4 - Module 1 to 5 Dossier)",
+            "WHO Prequalification (Global Tenders & Diagnostics PQ)"
         ]
     )
     
@@ -83,10 +80,14 @@ with st.sidebar:
         "Filing Transaction Intent",
         [
             "Import Licence & SUGAM Clearance (MD-14 / MD-15)",
-            "Domestic Manufacturing Licence (MD-7 / MD-9)",
+            "Domestic Manufacturing Licence (MD-7 / MD-8 / MD-9 / MD-10)",
+            "Test, Evaluation & Demo Import Licence (MD-16 / MD-17)",
+            "Loan Licence / Contract Manufacturing (MD-5 / MD-6)",
+            "Post-Approval Variation / Site Transfer (Rule 26 Amendment)",
             "Export Clearance & Free Sale Certificate (MD-28 / CoFS)",
-            "Clinical Investigation / Evaluation (MD-26 / SEC Review)",
-            "Post-Marketing Surveillance & PSUR Compliance (SUGAM 3.0)"
+            "Clinical Investigation & Trial Permission (MD-22 / MD-26 / SEC)",
+            "Post-Marketing Surveillance & PSUR Module (SUGAM 3.0)",
+            "Licence Retention / 5-Year Renewal Endorsement"
         ]
     )
     
@@ -192,7 +193,6 @@ def build_pdf_document(product, jurisdiction, intent, content):
     pdf.cell(0, 5, clean_date, ln=True)
     pdf.ln(5)
     
-    # Format markdown into clean human-readable text for PDF
     clean_text = content.replace("###", "").replace("##", "").replace("**", "").replace("–", "-").replace("—", "-").replace("“", '"').replace("”", '"').replace("’", "'").replace("•", "-")
     clean_body = clean_text.encode('latin-1', 'replace').decode('latin-1')
     
