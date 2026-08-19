@@ -40,6 +40,14 @@ st.markdown("""
         letter-spacing: 0.3px;
         transition: all 0.2s ease-in-out;
     }
+    .section-header {
+        font-size: 16px;
+        font-weight: 700;
+        color: #0F172A;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #E2E8F0;
+        margin-bottom: 15px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -154,14 +162,14 @@ def fetch_clinical_evidence(term):
         return "Clinical literature synthesis active via global databases."
 
 # ==========================================
-# 4. FIXED ENTERPRISE PDF GENERATOR
+# 4. ENTERPRISE PDF GENERATOR
 # ==========================================
 class EnterprisePDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 8)
         self.set_text_color(100, 116, 139)
-        self.cell(0, 6, "COMPLIVOX GLOBAL | STATUTORY REGULATORY ASSESSMENT REPORT", ln=True, align="R")
-        self.line(10, 15, 200, 15)
+        self.cell(0, 5, "COMPLIVOX GLOBAL | STATUTORY REGULATORY REPORT", ln=True, align="R")
+        self.line(10, 14, 200, 14)
         self.ln(3)
 
     def footer(self):
@@ -176,13 +184,11 @@ def build_pdf_document(product, jurisdiction, intent, content):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # Title Section
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(15, 23, 42)
     clean_product = product.encode('latin-1', 'replace').decode('latin-1')
     pdf.cell(0, 7, f"Regulatory Dossier: {clean_product}", ln=True)
     
-    # Clean Metadata Multi-lines (No Overlap)
     pdf.set_font("Helvetica", "B", 8.5)
     pdf.set_text_color(71, 85, 105)
     clean_jur = f"Authority: {jurisdiction}".encode('latin-1', 'replace').decode('latin-1')
@@ -198,7 +204,6 @@ def build_pdf_document(product, jurisdiction, intent, content):
     pdf.line(10, pdf.get_y() + 2, 200, pdf.get_y() + 2)
     pdf.ln(5)
     
-    # Clean Body Text
     clean_text = content.replace("###", "").replace("##", "").replace("**", "").replace("–", "-").replace("—", "-").replace("“", '"').replace("”", '"').replace("’", "'").replace("•", "-")
     clean_body = clean_text.encode('latin-1', 'replace').decode('latin-1')
     
@@ -208,16 +213,21 @@ def build_pdf_document(product, jurisdiction, intent, content):
     return bytes(pdf.output())
 
 # ==========================================
-# 5. USER INTERFACE & WORKSPACE
+# 5. DYNAMIC WORKSPACE (INTENT-AWARE UI)
 # ==========================================
+# Dynamic Title logic based on Selected Intent
+intent_short = submission_intent.split("(")[0].strip()
+dynamic_input_header = f"📋 {intent_short} Specification Console"
+dynamic_output_header = f"📑 Statutory Regulatory Intelligence ({target_framework.split('(')[0].strip()})"
+
 col_spec, col_dossier = st.columns([1, 1], gap="large")
 
 with col_spec:
-    st.markdown("#### 📋 Technical Submission Dossier")
+    st.markdown(f'<div class="section-header">{dynamic_input_header}</div>', unsafe_allow_html=True)
     
     prod_name = st.text_input("Product / Molecule / Device Trade Name", value="Sirolimus-Eluting Coronary Stent")
     
-    uploaded_file = st.file_uploader("📂 Upload Technical Spec Sheet or Lab Report (PDF / TXT)", type=["pdf", "txt"])
+    uploaded_file = st.file_uploader("📂 Upload Technical Data Sheet, Lab COA, or Dossier Draft (PDF / TXT)", type=["pdf", "txt"])
     doc_context = ""
     if uploaded_file is not None:
         doc_context = extract_text_from_file(uploaded_file)
@@ -261,7 +271,7 @@ with col_spec:
     exec_btn = st.button("🚀 Synthesize Global Regulatory Dossier", type="primary", use_container_width=True)
 
 with col_dossier:
-    st.markdown("#### 📑 Autonomous Regulatory Dossier")
+    st.markdown(f'<div class="section-header">{dynamic_output_header}</div>', unsafe_allow_html=True)
     
     if exec_btn:
         if not sarvam_api_key:
