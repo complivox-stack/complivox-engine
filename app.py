@@ -7,6 +7,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
+import pypdf
 
 # 1. Page Configuration
 st.set_page_config(
@@ -16,26 +17,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Corporate CSS for Enterprise Look
+# Custom Corporate Styling
 st.markdown("""
 <style>
     .main-header { font-size: 2.2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0px; }
     .sub-header { font-size: 1rem; color: #4B5563; margin-bottom: 20px; }
     .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; margin-right: 6px; }
     .badge-blue { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
-    .card { background-color: #F8FAFC; border-radius: 8px; padding: 16px; border: 1px solid #E2E8F0; margin-bottom: 12px; }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. Jurisdiction & Statutory Data
+# 2. Statutory Knowledge Base
 JURISDICTION_CONFIGS = {
     "India (CDSCO / MDR 2017)": {
         "forms": ["Form MD-14 (Import)", "Form MD-7 (Mfg Class A/B)", "Form MD-8 (Mfg Class C/D)", "SUGAM 3.0 Portal"],
         "checklist": [
-            {"Statutory Document": "Device Master File (Appendix II)", "Regulatory Standard": "Fourth Schedule", "Compliance Status": "⚠️ In Review"},
-            {"Statutory Document": "Plant Master File (PMF)", "Regulatory Standard": "Part III Rule 20", "Compliance Status": "✅ Ready"},
-            {"Statutory Document": "ISO 13485:2016 Certification", "Regulatory Standard": "QMS Statutory", "Compliance Status": "✅ Verified"},
-            {"Statutory Document": "Biocompatibility & Pre-Clinical", "Regulatory Standard": "ISO 10993 Series", "Compliance Status": "❌ Action Required"}
+            {"Statutory Document": "Device Master File (Appendix II)", "Regulatory Standard": "Fourth Schedule", "Compliance Status": "[UNDER REVIEW]"},
+            {"Statutory Document": "Plant Master File (PMF)", "Regulatory Standard": "Part III Rule 20", "Compliance Status": "[VERIFIED]"},
+            {"Statutory Document": "ISO 13485:2016 Certification", "Regulatory Standard": "QMS Statutory", "Compliance Status": "[VERIFIED]"},
+            {"Statutory Document": "Biocompatibility & Pre-Clinical", "Regulatory Standard": "ISO 10993 Series", "Compliance Status": "[ACTION REQUIRED]"}
         ],
         "sec_queries": [
             {
@@ -61,10 +61,10 @@ JURISDICTION_CONFIGS = {
     "USA (US FDA - 510k / PMA)": {
         "forms": ["510(k) Premarket Notification", "De Novo Classification", "PMA (Class III)", "eSTAR XML Portal"],
         "checklist": [
-            {"Statutory Document": "Substantial Equivalence (SE) Rationale", "Regulatory Standard": "21 CFR 807.87", "Compliance Status": "✅ Verified"},
-            {"Statutory Document": "Design History File (DHF) Traceability", "Regulatory Standard": "21 CFR 820.30", "Compliance Status": "⚠️ In Review"},
-            {"Statutory Document": "Software Lifecycle Documentation (SaMD)", "Regulatory Standard": "IEC 62304 / FDA Guidance", "Compliance Status": "✅ Ready"},
-            {"Statutory Document": "Human Factors & Usability Engineering", "Regulatory Standard": "ANSI/AAMI HE75", "Compliance Status": "❌ Action Required"}
+            {"Statutory Document": "Substantial Equivalence (SE) Rationale", "Regulatory Standard": "21 CFR 807.87", "Compliance Status": "[VERIFIED]"},
+            {"Statutory Document": "Design History File (DHF) Traceability", "Regulatory Standard": "21 CFR 820.30", "Compliance Status": "[UNDER REVIEW]"},
+            {"Statutory Document": "Software Lifecycle Documentation (SaMD)", "Regulatory Standard": "IEC 62304 / FDA Guidance", "Compliance Status": "[READY]"},
+            {"Statutory Document": "Human Factors & Usability Engineering", "Regulatory Standard": "ANSI/AAMI HE75", "Compliance Status": "[ACTION REQUIRED]"}
         ],
         "sec_queries": [
             {
@@ -84,10 +84,10 @@ JURISDICTION_CONFIGS = {
     "EU (CE MDR 2017/745)": {
         "forms": ["Annex II Technical Documentation", "Annex III Post-Market Surveillance", "GSPR Checklist", "EUDAMED Module 2"],
         "checklist": [
-            {"Statutory Document": "General Safety and Performance (GSPR)", "Regulatory Standard": "Annex I Essential Regs", "Compliance Status": "✅ Ready"},
-            {"Statutory Document": "Clinical Evaluation Report (CER)", "Regulatory Standard": "MEDDEV 2.7/1 rev 4 & MDR Art 61", "Compliance Status": "⚠️ Missing PMCF"},
-            {"Statutory Document": "Risk Management File", "Regulatory Standard": "ISO 14971:2019", "Compliance Status": "✅ Ready"},
-            {"Statutory Document": "Periodic Safety Update Report (PSUR)", "Regulatory Standard": "Article 86 MDR", "Compliance Status": "❌ Action Required"}
+            {"Statutory Document": "General Safety and Performance (GSPR)", "Regulatory Standard": "Annex I Essential Regs", "Compliance Status": "[READY]"},
+            {"Statutory Document": "Clinical Evaluation Report (CER)", "Regulatory Standard": "MEDDEV 2.7/1 rev 4 & MDR Art 61", "Compliance Status": "[MISSING PMCF]"},
+            {"Statutory Document": "Risk Management File", "Regulatory Standard": "ISO 14971:2019", "Compliance Status": "[READY]"},
+            {"Statutory Document": "Periodic Safety Update Report (PSUR)", "Regulatory Standard": "Article 86 MDR", "Compliance Status": "[ACTION REQUIRED]"}
         ],
         "sec_queries": [
             {
@@ -129,6 +129,18 @@ def on_demo_select():
         st.session_state.ind_use = data["use"]
         st.session_state.risk_idx = RISK_CLASSES.index(data["class"])
 
+def extract_text_from_pdf(uploaded_file):
+    try:
+        reader = pypdf.PdfReader(uploaded_file)
+        full_text = []
+        for page in reader.pages[:5]:
+            txt = page.extract_text()
+            if txt:
+                full_text.append(txt)
+        return "\n".join(full_text)
+    except Exception as e:
+        return f"Error reading PDF: {e}"
+
 def set_cell_bg(cell, fill_hex):
     tcPr = cell._tc.get_or_add_tcPr()
     shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill_hex}"/>')
@@ -137,14 +149,12 @@ def set_cell_bg(cell, fill_hex):
 def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
     doc = Document()
     
-    # 0.75" Margins
     for sec in doc.sections:
         sec.top_margin = Inches(0.75)
         sec.bottom_margin = Inches(0.75)
         sec.left_margin = Inches(0.75)
         sec.right_margin = Inches(0.75)
         
-    # Document Header
     p_hdr = doc.add_paragraph()
     r1 = p_hdr.add_run("COMPLIVOX REGULATORY INTELLIGENCE DOSSIER")
     r1.bold = True
@@ -158,7 +168,7 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
     r2.font.color.rgb = RGBColor(100, 116, 139)
     doc.add_paragraph().paragraph_format.space_after = Pt(8)
 
-    # 1. Device Identification Table
+    # 1. Device Profile
     doc.add_heading("1. Target Medical Device Profile", level=2)
     meta_tbl = doc.add_table(rows=4, cols=2)
     meta_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -166,7 +176,7 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
         ("Device Identification", name if name else "Target Medical Device"),
         ("Statutory Jurisdiction", juris),
         ("Regulatory Classification", r_class),
-        ("Intended Purpose / Indications", use if use else "General Clinical Application")
+        ("Intended Purpose / Indications", use[:300] + "..." if len(use) > 300 else use)
     ]
     for i, (k, v) in enumerate(fields):
         c0 = meta_tbl.rows[i].cells[0]
@@ -202,26 +212,23 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
 
     doc.add_paragraph().paragraph_format.space_after = Pt(10)
 
-    # 3. SEC Objection Defense Table
+    # 3. SEC Defense Boxes
     doc.add_heading("3. Subject Expert Committee (SEC) Defense & Response (RTQ)", level=2)
     for idx, q in enumerate(sec_items, 1):
         ob_box = doc.add_table(rows=3, cols=1)
         ob_box.alignment = WD_TABLE_ALIGNMENT.CENTER
         
-        # Objection line
         c1 = ob_box.rows[0].cells[0]
         run1 = c1.paragraphs[0].add_run(f"Objection #{idx}: {q['deficiency']}  [{q['risk_level']}]")
         run1.bold = True
         run1.font.color.rgb = RGBColor(185, 28, 28)
         set_cell_bg(c1, "FEF2F2")
         
-        # Standard line
         c2 = ob_box.rows[1].cells[0]
         run2 = c2.paragraphs[0].add_run(f"Statutory Standard: {q['statutory_reference']}")
         run2.font.italic = True
         set_cell_bg(c2, "FFFFFF")
         
-        # Defense strategy line
         c3 = ob_box.rows[2].cells[0]
         run3 = c3.paragraphs[0].add_run(f"Recommended Defense (RTQ): {q['recommended_defense']}")
         run3.bold = True
@@ -234,7 +241,7 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
     out_buf.seek(0)
     return out_buf
 
-# 3. Sidebar UI
+# Sidebar UI
 st.sidebar.markdown("### 🏛️ Complivox Global")
 selected_jurisdiction = st.sidebar.selectbox("Active Jurisdiction", list(JURISDICTION_CONFIGS.keys()))
 st.sidebar.markdown("---")
@@ -242,7 +249,7 @@ st.sidebar.selectbox("⚡ 1-Click Sample Pre-loader:", list(DEMO_DEVICES.keys())
 st.sidebar.markdown("---")
 st.sidebar.info("🛡️ **Enterprise Regulatory Engine**\nDirect statutory synthesis across CDSCO, FDA & MDR databases.")
 
-# 4. Main Body
+# Main Body
 st.markdown('<p class="main-header">Complivox Regulatory Intelligence Platform</p>', unsafe_allow_html=True)
 st.markdown(f'<p class="sub-header">Active Statutory Framework: <b>{selected_jurisdiction}</b></p>', unsafe_allow_html=True)
 
@@ -255,6 +262,18 @@ tab_build, tab_audit, tab_sec = st.tabs([
 ])
 
 with tab_build:
+    st.markdown("##### 📁 Client Document Ingestion (Optional)")
+    uploaded_pdf = st.file_uploader("Upload Device Master File / Technical Summary (PDF)", type=["pdf"], help="Upload PDF to auto-extract technical parameters and indications.")
+    
+    if uploaded_pdf is not None:
+        extracted = extract_text_from_pdf(uploaded_pdf)
+        if extracted and not extracted.startswith("Error"):
+            st.success(f"✅ Successfully ingested `{uploaded_pdf.name}` ({len(extracted.split())} words parsed)")
+            if not st.session_state.dev_name:
+                st.session_state.dev_name = uploaded_pdf.name.replace(".pdf", "")
+            if not st.session_state.ind_use:
+                st.session_state.ind_use = extracted[:400].strip() + "..."
+    
     col_a, col_b = st.columns(2)
     dev_name = col_a.text_input("Medical Device Name", value=st.session_state.dev_name, placeholder="e.g. Compli-Hip Acetabular System")
     r_class = col_b.selectbox("Device Risk Classification", RISK_CLASSES, index=st.session_state.risk_idx)
@@ -280,7 +299,7 @@ with tab_audit:
         st.write("### Mandatory Document Gap Matrix")
         st.dataframe(pd.DataFrame(curr_data["checklist"]), use_container_width=True, hide_index=True)
     else:
-        st.info("💡 Fill the device details and click **'Compile Regulatory Intelligence Dossier'** to unlock the audit matrix.")
+        st.info("💡 Fill the device details (or upload PDF) and click **'Compile Regulatory Intelligence Dossier'** to unlock the audit matrix.")
 
 with tab_sec:
     if st.session_state.get('compiled'):
@@ -301,7 +320,6 @@ with tab_sec:
         }
         st.dataframe(pd.DataFrame(predicate_data), use_container_width=True, hide_index=True)
         
-        # Word Document Generation
         docx_bytes = generate_styled_docx(
             name=dev_name,
             juris=selected_jurisdiction,
