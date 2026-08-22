@@ -2,84 +2,105 @@ import streamlit as st
 import pandas as pd
 import io
 from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 
-# Page Setup
-st.set_page_config(page_title="Complivox Global RegTech", layout="wide")
+# 1. Page Configuration
+st.set_page_config(
+    page_title="Complivox Global | Enterprise RegTech Platform",
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Jurisdiction-specific Statutory & SEC Configurations
+# Custom Corporate CSS for Enterprise Look
+st.markdown("""
+<style>
+    .main-header { font-size: 2.2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0px; }
+    .sub-header { font-size: 1rem; color: #4B5563; margin-bottom: 20px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; margin-right: 6px; }
+    .badge-blue { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+    .card { background-color: #F8FAFC; border-radius: 8px; padding: 16px; border: 1px solid #E2E8F0; margin-bottom: 12px; }
+</style>
+""", unsafe_allow_html=True)
+
+# 2. Jurisdiction & Statutory Data
 JURISDICTION_CONFIGS = {
     "India (CDSCO / MDR 2017)": {
-        "forms": ["Form MD-14 (Import)", "Form MD-7 (Mfg Class A/B)", "Form MD-8 (Mfg Class C/D)", "SUGAM 3.0 Filing"],
+        "forms": ["Form MD-14 (Import)", "Form MD-7 (Mfg Class A/B)", "Form MD-8 (Mfg Class C/D)", "SUGAM 3.0 Portal"],
         "checklist": [
-            {"Requirement": "Device Master File (Appendix II)", "Status": "⚠️ In Review", "Standard": "Fourth Schedule"},
-            {"Requirement": "Plant Master File (PMF)", "Status": "✅ Ready", "Standard": "Part III Rule 20"},
-            {"Requirement": "ISO 13485:2016 Certification", "Status": "✅ Verified", "Standard": "QMS Statutory"},
-            {"Requirement": "Biocompatibility & Animal Study", "Status": "❌ Missing", "Standard": "ISO 10993"}
+            {"Statutory Document": "Device Master File (Appendix II)", "Regulatory Standard": "Fourth Schedule", "Compliance Status": "⚠️ In Review"},
+            {"Statutory Document": "Plant Master File (PMF)", "Regulatory Standard": "Part III Rule 20", "Compliance Status": "✅ Ready"},
+            {"Statutory Document": "ISO 13485:2016 Certification", "Regulatory Standard": "QMS Statutory", "Compliance Status": "✅ Verified"},
+            {"Statutory Document": "Biocompatibility & Pre-Clinical", "Regulatory Standard": "ISO 10993 Series", "Compliance Status": "❌ Action Required"}
         ],
         "sec_queries": [
             {
-                "deficiency": "Lack of Indian Clinical Population Equivalence Data",
-                "risk_level": "High (Class C/D)",
-                "statutory_reference": "MDR 2017 Part III (Clinical Investigation)",
-                "recommended_defense": "Submit GHTF-harmonized overseas clinical evaluation along with waiver justification under Rule 60(1)."
+                "deficiency": "Absence of Indian Clinical Population Equivalence Dataset",
+                "risk_level": "Critical (Class C/D)",
+                "statutory_reference": "MDR 2017 Part III (Clinical Investigation Rules)",
+                "recommended_defense": "Submit GHTF-harmonized overseas multicenter trial data accompanied by clinical waiver justification under statutory Rule 60(1)."
             },
             {
-                "deficiency": "Incomplete Accelerated vs Real-time Shelf-Life Stability Reports",
-                "risk_level": "Medium",
-                "statutory_reference": "ISO 11607 & ASTM F1980",
-                "recommended_defense": "Attach ongoing real-time aging protocol with intermediate 6-month accelerated degradation testing logs."
+                "deficiency": "Incomplete Accelerated vs Real-time Shelf-Life Degradation Study",
+                "risk_level": "Moderate",
+                "statutory_reference": "ISO 11607-1 & ASTM F1980",
+                "recommended_defense": "Furnish ongoing real-time packaging integrity protocol with certified 6-month intermediate accelerated aging logs."
             },
             {
-                "deficiency": "Residual Risk Acceptability Matrix for Critical Components",
+                "deficiency": "Residual Toxicological Risk Assessment for Patient Contact Parts",
                 "risk_level": "High",
-                "statutory_reference": "ISO 14971:2019 Clause 7.4",
-                "recommended_defense": "Provide quantified Benefit-Risk analysis justifying residual toxicity threshold for patient contact materials."
+                "statutory_reference": "ISO 14971:2019 Clause 7.4 & ISO 10993-17",
+                "recommended_defense": "Provide quantitative Benefit-Risk Ratio analysis demonstrating allowable Tolerable Intake (TI) limits for extractables/leachables."
             }
         ]
     },
     "USA (US FDA - 510k / PMA)": {
-        "forms": ["510(k) Premarket Notification", "De Novo Classification", "PMA (Class III)", "eSTAR XML Schema"],
+        "forms": ["510(k) Premarket Notification", "De Novo Classification", "PMA (Class III)", "eSTAR XML Portal"],
         "checklist": [
-            {"Requirement": "Substantial Equivalence (SE) Rationale", "Status": "✅ Verified", "Standard": "21 CFR 807.87"},
-            {"Requirement": "Design History File (DHF) Traceability", "Status": "⚠️ In Review", "Standard": "21 CFR 820.30"},
-            {"Requirement": "Software Lifecycle (SaMD)", "Status": "✅ Ready", "Standard": "IEC 62304 / FDA Guidance"},
-            {"Requirement": "Human Factors & Usability Engineering", "Status": "❌ Missing", "Standard": "ANSI/AAMI HE75"}
+            {"Statutory Document": "Substantial Equivalence (SE) Rationale", "Regulatory Standard": "21 CFR 807.87", "Compliance Status": "✅ Verified"},
+            {"Statutory Document": "Design History File (DHF) Traceability", "Regulatory Standard": "21 CFR 820.30", "Compliance Status": "⚠️ In Review"},
+            {"Statutory Document": "Software Lifecycle Documentation (SaMD)", "Regulatory Standard": "IEC 62304 / FDA Guidance", "Compliance Status": "✅ Ready"},
+            {"Statutory Document": "Human Factors & Usability Engineering", "Regulatory Standard": "ANSI/AAMI HE75", "Compliance Status": "❌ Action Required"}
         ],
         "sec_queries": [
             {
-                "deficiency": "Refusal to Accept (RTA): Insufficient Bench Performance Testing vs Predicate",
-                "risk_level": "High",
-                "statutory_reference": "FDA 510(k) Third-Party Guidance",
-                "recommended_defense": "Execute side-by-side mechanical fatigue testing with identical cycle parameters to predicate standard."
+                "deficiency": "Refusal to Accept (RTA): Insufficient Dynamic Fatigue Bench Data vs Predicate",
+                "risk_level": "Critical",
+                "statutory_reference": "FDA 510(k) Orthopedic / Implant Review Guidance",
+                "recommended_defense": "Execute direct side-by-side fatigue cycling (10M cycles) under identical physiological loading parameters as identified predicate."
             },
             {
                 "deficiency": "Cybersecurity Bill of Materials (CBOM) Traceability Gap",
-                "risk_level": "Medium",
-                "statutory_reference": "Section 524B FD&C Act",
-                "recommended_defense": "Attach software architecture SBOM with static code analysis vulnerabilities log."
+                "risk_level": "Moderate",
+                "statutory_reference": "Section 524B FD&C Act (Cybersecurity in Devices)",
+                "recommended_defense": "Submit full CycloneDX SBOM documentation along with third-party penetration and static code vulnerability assessments."
             }
         ]
     },
     "EU (CE MDR 2017/745)": {
-        "forms": ["Annex II Technical Documentation", "Annex III Post-Market Surveillance", "GSPR Checklist", "EUDAMED Registration"],
+        "forms": ["Annex II Technical Documentation", "Annex III Post-Market Surveillance", "GSPR Checklist", "EUDAMED Module 2"],
         "checklist": [
-            {"Requirement": "General Safety and Performance (GSPR)", "Status": "✅ Ready", "Standard": "Annex I Essential Regs"},
-            {"Requirement": "Clinical Evaluation Report (CER)", "Status": "⚠️ Missing PMCF", "Standard": "MEDDEV 2.7/1 rev 4"},
-            {"Requirement": "Risk Management File", "Status": "✅ Ready", "Standard": "ISO 14971:2019"},
-            {"Requirement": "Periodic Safety Update Report (PSUR)", "Status": "❌ Needs Template", "Standard": "Article 86 MDR"}
+            {"Statutory Document": "General Safety and Performance (GSPR)", "Regulatory Standard": "Annex I Essential Regs", "Compliance Status": "✅ Ready"},
+            {"Statutory Document": "Clinical Evaluation Report (CER)", "Regulatory Standard": "MEDDEV 2.7/1 rev 4 & MDR Art 61", "Compliance Status": "⚠️ Missing PMCF"},
+            {"Statutory Document": "Risk Management File", "Regulatory Standard": "ISO 14971:2019", "Compliance Status": "✅ Ready"},
+            {"Statutory Document": "Periodic Safety Update Report (PSUR)", "Regulatory Standard": "Article 86 MDR", "Compliance Status": "❌ Action Required"}
         ],
         "sec_queries": [
             {
-                "deficiency": "Notified Body Scrutiny: Insufficient Post-Market Clinical Follow-up (PMCF) Rationale",
-                "risk_level": "High",
-                "statutory_reference": "MDR Annex XIV Part B",
-                "recommended_defense": "Submit prospective PMCF registry protocol targeting 5-year patient outcome data."
+                "deficiency": "Notified Body Scrutiny: Inadequate Post-Market Clinical Follow-up (PMCF) Protocol",
+                "risk_level": "Critical",
+                "statutory_reference": "MDR Annex XIV Part B (PMCF)",
+                "recommended_defense": "Deploy prospective multicenter PMCF patient registry with structured 5-year primary clinical endpoint tracking."
             },
             {
-                "deficiency": "State-of-the-Art (SOTA) Literature Search Filter String Deficiencies",
-                "risk_level": "Medium",
-                "statutory_reference": "MDCG 2020-6",
-                "recommended_defense": "Re-run systematic literature search including PRISMA flowchart and adverse database logs."
+                "deficiency": "State-of-the-Art (SOTA) Systematic Literature Filter Inadequacy",
+                "risk_level": "Moderate",
+                "statutory_reference": "MDCG 2020-6 Clinical Evaluation Guidance",
+                "recommended_defense": "Reconstruct search string using PRISMA methodological flow diagrams across Embase, PubMed, and MAUDE databases."
             }
         ]
     }
@@ -87,105 +108,215 @@ JURISDICTION_CONFIGS = {
 
 DEMO_DEVICES = {
     "Select Demo Device...": {"name": "", "use": "", "class": "Class A (Low)"},
-    "Orthopedic Titanium Hip Implant": {"name": "Compli-Hip Total Joint", "use": "Total hip arthroplasty for severe joint degeneration.", "class": "Class C (Mod-High)"},
-    "Drug-Eluting Coronary Stent System": {"name": "Compli-DES Stent", "use": "Percutaneous coronary intervention in symptomatic ischemic disease.", "class": "Class D (High)"},
-    "AI Diagnostic ECG Monitor": {"name": "CardioSense 300", "use": "Continuous automated ECG screening and arrhythmia classification.", "class": "Class B (Low-Med)"}
+    "Orthopedic Titanium Hip Implant": {"name": "Compli-Hip Total Acetabular System", "use": "Total hip arthroplasty for primary and secondary joint degeneration.", "class": "Class C (Mod-High)"},
+    "Drug-Eluting Coronary Stent System": {"name": "Compli-DES Bioresorbable Stent", "use": "Percutaneous coronary intervention in symptomatic ischemic artery disease.", "class": "Class D (High)"},
+    "AI Diagnostic ECG Monitor": {"name": "CardioSense 300 AI Telemetry", "use": "Continuous automated ambulatory ECG screening and arrhythmia classification.", "class": "Class B (Low-Med)"}
 }
 
-# Session State Initialization
-if 'device_name' not in st.session_state:
-    st.session_state.device_name = ""
-    st.session_state.intended_use = ""
+RISK_CLASSES = ["Class A (Low)", "Class B (Low-Med)", "Class C (Mod-High)", "Class D (High)"]
 
-def load_demo_data():
-    sel = st.session_state.selected_demo
-    if sel != "Select Demo Device...":
-        st.session_state.device_name = DEMO_DEVICES[sel]["name"]
-        st.session_state.intended_use = DEMO_DEVICES[sel]["use"]
+# State Initialization
+if 'dev_name' not in st.session_state:
+    st.session_state.dev_name = ""
+    st.session_state.ind_use = ""
+    st.session_state.risk_idx = 0
 
-# Sidebar Setup
-st.sidebar.title("Complivox Global")
-selected_jurisdiction = st.sidebar.selectbox("Regulatory Jurisdiction", list(JURISDICTION_CONFIGS.keys()))
-st.sidebar.markdown("---")
-st.sidebar.selectbox("⚡ 1-Click Sample Pre-loader:", list(DEMO_DEVICES.keys()), key="selected_demo", on_change=load_demo_data)
+def on_demo_select():
+    choice = st.session_state.demo_picker
+    if choice != "Select Demo Device...":
+        data = DEMO_DEVICES[choice]
+        st.session_state.dev_name = data["name"]
+        st.session_state.ind_use = data["use"]
+        st.session_state.risk_idx = RISK_CLASSES.index(data["class"])
 
-st.sidebar.markdown("---")
-st.sidebar.info("💼 **Enterprise Regulatory Intelligence**\nComplivox Regulatory Engine active for statutory automation.")
+def set_cell_bg(cell, fill_hex):
+    tcPr = cell._tc.get_or_add_tcPr()
+    shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill_hex}"/>')
+    tcPr.append(shd)
 
-# Main Interface
-st.title("Complivox Regulatory Intelligence Platform")
-st.caption(f"Active Statutory Framework: **{selected_jurisdiction}**")
-
-active_data = JURISDICTION_CONFIGS[selected_jurisdiction]
-
-tab1, tab2, tab3 = st.tabs(["📋 Submission Builder", "🔍 Statutory Gap Audit", "⚖️ SEC Scrutiny & Deficiency Forecast"])
-
-with tab1:
-    col1, col2 = st.columns(2)
-    device_name = col1.text_input("Medical Device Name", value=st.session_state.device_name)
-    risk_class = col2.selectbox("Device Risk Classification", ["Class A (Low)", "Class B (Low-Med)", "Class C (Mod-High)", "Class D (High)"])
-    intended_use = st.text_area("Intended Purpose / Indications for Use", value=st.session_state.intended_use, height=100)
+def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
+    doc = Document()
     
-    st.write("**Applicable Statutory Filing Portals & Forms:**")
-    st.write(", ".join([f"`{f}`" for f in active_data["forms"]]))
+    # 0.75" Margins
+    for sec in doc.sections:
+        sec.top_margin = Inches(0.75)
+        sec.bottom_margin = Inches(0.75)
+        sec.left_margin = Inches(0.75)
+        sec.right_margin = Inches(0.75)
+        
+    # Document Header
+    p_hdr = doc.add_paragraph()
+    r1 = p_hdr.add_run("COMPLIVOX REGULATORY INTELLIGENCE DOSSIER")
+    r1.bold = True
+    r1.font.size = Pt(17)
+    r1.font.color.rgb = RGBColor(16, 44, 87)
     
-    if st.button("Generate Regulatory Intelligence Dossier"):
-        st.session_state.dossier_ready = True
-        st.success("Dossier compiled successfully across selected regulatory framework.")
+    p_sub = doc.add_paragraph()
+    r2 = p_sub.add_run(f"Confidential Statutory Review & SEC Defense Assessment | {juris}")
+    r2.font.size = Pt(10)
+    r2.font.italic = True
+    r2.font.color.rgb = RGBColor(100, 116, 139)
+    doc.add_paragraph().paragraph_format.space_after = Pt(8)
 
-with tab2:
-    if st.session_state.get('dossier_ready'):
+    # 1. Device Identification Table
+    doc.add_heading("1. Target Medical Device Profile", level=2)
+    meta_tbl = doc.add_table(rows=4, cols=2)
+    meta_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    fields = [
+        ("Device Identification", name if name else "Target Medical Device"),
+        ("Statutory Jurisdiction", juris),
+        ("Regulatory Classification", r_class),
+        ("Intended Purpose / Indications", use if use else "General Clinical Application")
+    ]
+    for i, (k, v) in enumerate(fields):
+        c0 = meta_tbl.rows[i].cells[0]
+        c1 = meta_tbl.rows[i].cells[1]
+        c0.width = Inches(2.2)
+        c1.width = Inches(4.8)
+        c0.paragraphs[0].add_run(k).bold = True
+        c1.paragraphs[0].add_run(v)
+        set_cell_bg(c0, "F1F5F9")
+        set_cell_bg(c1, "FFFFFF")
+    
+    doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+    # 2. Gap Audit Matrix Table
+    doc.add_heading("2. Statutory Documentation Gap Matrix", level=2)
+    gap_tbl = doc.add_table(rows=len(checklist) + 1, cols=3)
+    gap_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    headers = ["Regulatory Requirement", "Standard / Mandate", "Audit Finding"]
+    for j, h in enumerate(headers):
+        c = gap_tbl.rows[0].cells[j]
+        run = c.paragraphs[0].add_run(h)
+        run.bold = True
+        run.font.color.rgb = RGBColor(255, 255, 255)
+        set_cell_bg(c, "102C57")
+
+    for i, row in enumerate(checklist, 1):
+        gap_tbl.rows[i].cells[0].paragraphs[0].add_run(row["Statutory Document"])
+        gap_tbl.rows[i].cells[1].paragraphs[0].add_run(row["Regulatory Standard"])
+        gap_tbl.rows[i].cells[2].paragraphs[0].add_run(row["Compliance Status"]).bold = True
+        bg = "F8FAFC" if i % 2 == 0 else "FFFFFF"
+        for j in range(3):
+            set_cell_bg(gap_tbl.rows[i].cells[j], bg)
+
+    doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+    # 3. SEC Objection Defense Table
+    doc.add_heading("3. Subject Expert Committee (SEC) Defense & Response (RTQ)", level=2)
+    for idx, q in enumerate(sec_items, 1):
+        ob_box = doc.add_table(rows=3, cols=1)
+        ob_box.alignment = WD_TABLE_ALIGNMENT.CENTER
+        
+        # Objection line
+        c1 = ob_box.rows[0].cells[0]
+        run1 = c1.paragraphs[0].add_run(f"Objection #{idx}: {q['deficiency']}  [{q['risk_level']}]")
+        run1.bold = True
+        run1.font.color.rgb = RGBColor(185, 28, 28)
+        set_cell_bg(c1, "FEF2F2")
+        
+        # Standard line
+        c2 = ob_box.rows[1].cells[0]
+        run2 = c2.paragraphs[0].add_run(f"Statutory Standard: {q['statutory_reference']}")
+        run2.font.italic = True
+        set_cell_bg(c2, "FFFFFF")
+        
+        # Defense strategy line
+        c3 = ob_box.rows[2].cells[0]
+        run3 = c3.paragraphs[0].add_run(f"Recommended Defense (RTQ): {q['recommended_defense']}")
+        run3.bold = True
+        set_cell_bg(c3, "F0FDF4")
+        
+        doc.add_paragraph().paragraph_format.space_after = Pt(6)
+
+    out_buf = io.BytesIO()
+    doc.save(out_buf)
+    out_buf.seek(0)
+    return out_buf
+
+# 3. Sidebar UI
+st.sidebar.markdown("### 🏛️ Complivox Global")
+selected_jurisdiction = st.sidebar.selectbox("Active Jurisdiction", list(JURISDICTION_CONFIGS.keys()))
+st.sidebar.markdown("---")
+st.sidebar.selectbox("⚡ 1-Click Sample Pre-loader:", list(DEMO_DEVICES.keys()), key="demo_picker", on_change=on_demo_select)
+st.sidebar.markdown("---")
+st.sidebar.info("🛡️ **Enterprise Regulatory Engine**\nDirect statutory synthesis across CDSCO, FDA & MDR databases.")
+
+# 4. Main Body
+st.markdown('<p class="main-header">Complivox Regulatory Intelligence Platform</p>', unsafe_allow_html=True)
+st.markdown(f'<p class="sub-header">Active Statutory Framework: <b>{selected_jurisdiction}</b></p>', unsafe_allow_html=True)
+
+curr_data = JURISDICTION_CONFIGS[selected_jurisdiction]
+
+tab_build, tab_audit, tab_sec = st.tabs([
+    "📋 Submission Dossier Builder",
+    "🔍 Statutory Gap Audit",
+    "⚖️ SEC Scrutiny & RTQ Defense"
+])
+
+with tab_build:
+    col_a, col_b = st.columns(2)
+    dev_name = col_a.text_input("Medical Device Name", value=st.session_state.dev_name, placeholder="e.g. Compli-Hip Acetabular System")
+    r_class = col_b.selectbox("Device Risk Classification", RISK_CLASSES, index=st.session_state.risk_idx)
+    intended_use = st.text_area("Intended Purpose / Indications for Clinical Use", value=st.session_state.ind_use, height=95)
+    
+    st.write("**Applicable Statutory Portals & Submission Forms:**")
+    badges_html = " ".join([f'<span class="badge badge-blue">{f}</span>' for f in curr_data["forms"]])
+    st.markdown(badges_html, unsafe_allow_html=True)
+    st.write("")
+    
+    if st.button("🚀 Compile Regulatory Intelligence Dossier", type="primary"):
+        st.session_state.compiled = True
+        st.success("Dossier compiled successfully against statutory regulations.")
+
+with tab_audit:
+    if st.session_state.get('compiled'):
         st.subheader("Statutory Compliance & Readiness Scorecard")
-        col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Audit Readiness Index", "84%", "Passing Grade")
-        col_m2.metric("Pending Statutory Mandates", "2 Items", delta="-High Priority")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Audit Readiness Index", "84%", "Passing Grade")
+        m2.metric("Pending Statutory Mandates", "2 Items", delta="-High Priority")
+        m3.metric("Predicate Equivalence", "92%", "Robust Alignment")
         
         st.write("### Mandatory Document Gap Matrix")
-        st.table(pd.DataFrame(active_data["checklist"]))
+        st.dataframe(pd.DataFrame(curr_data["checklist"]), use_container_width=True, hide_index=True)
     else:
-        st.info("Fill device details and click 'Generate Regulatory Intelligence Dossier' to unlock analysis.")
+        st.info("💡 Fill the device details and click **'Compile Regulatory Intelligence Dossier'** to unlock the audit matrix.")
 
-with tab3:
-    if st.session_state.get('dossier_ready'):
-        st.subheader("Subject Expert Committee (SEC) Deficiency Forecaster")
+with tab_sec:
+    if st.session_state.get('compiled'):
+        st.subheader("Subject Expert Committee (SEC) Deficiency Forecast")
         st.write("Predicted regulatory objections & recommended response strategies (RTQ):")
         
-        for idx, item in enumerate(active_data["sec_queries"], 1):
-            with st.expander(f"⚠️ Deficiency #{idx}: {item['deficiency']} ({item['risk_level']})", expanded=True):
-                st.write(f"**Statutory Rule:** `{item['statutory_reference']}`")
+        for idx, item in enumerate(curr_data["sec_queries"], 1):
+            with st.expander(f"⚠️ Deficiency #{idx}: {item['deficiency']}  [{item['risk_level']}]", expanded=True):
+                st.markdown(f"**Statutory Standard:** `{item['statutory_reference']}`")
                 st.info(f"**Recommended Defense Strategy:** {item['recommended_defense']}")
         
         st.markdown("---")
-        st.subheader("Substantial Equivalence Matrix")
-        comp_table = {
-            "Evaluation Parameter": ["Primary Material", "Sterilization Method", "Biocompatibility Standards", "Shelf-Life Stability"],
-            "Target Device": ["Medical Grade Ti-6Al-4V", "Ethylene Oxide (EtO)", "ISO 10993 Series Passed", "3 Years Accelerated"],
-            "Predicate Standard": ["Ti-6Al-4V ELI", "Gamma Irradiation", "ISO 10993 Compliant", "2 Years Real-Time"]
+        st.subheader("Substantial Equivalence (SE) Matrix")
+        predicate_data = {
+            "Evaluation Parameter": ["Primary Biomaterial", "Sterilization Modality", "Biocompatibility Evaluation", "Shelf-Life Stability Protocol"],
+            "Target Device Profile": ["Medical Grade Ti-6Al-4V ELI", "Ethylene Oxide (EtO)", "ISO 10993 Series Validated", "3 Years Accelerated (ASTM F1980)"],
+            "Predicate Standard Device": ["Ti-6Al-4V Standard", "Gamma Irradiation", "ISO 10993 Compliant", "2 Years Real-Time Certified"]
         }
-        st.table(pd.DataFrame(comp_table))
+        st.dataframe(pd.DataFrame(predicate_data), use_container_width=True, hide_index=True)
         
-        # Word Document Export Generation
-        doc = Document()
-        doc.add_heading(f"Regulatory Dossier - {device_name if device_name else 'Medical Device'}", 0)
-        doc.add_paragraph(f"Jurisdiction: {selected_jurisdiction}")
-        doc.add_paragraph(f"Risk Class: {risk_class}")
-        doc.add_paragraph(f"Intended Use: {intended_use}")
-        
-        doc.add_heading("SEC Deficiency Forecaster & RTQ Strategy", level=1)
-        for q in active_data["sec_queries"]:
-            doc.add_paragraph(f"• Query: {q['deficiency']} [{q['risk_level']}]")
-            doc.add_paragraph(f"  Statutory Ref: {q['statutory_reference']}")
-            doc.add_paragraph(f"  Defense Strategy: {q['recommended_defense']}")
-        
-        buffer = io.BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
+        # Word Document Generation
+        docx_bytes = generate_styled_docx(
+            name=dev_name,
+            juris=selected_jurisdiction,
+            r_class=r_class,
+            use=intended_use,
+            checklist=curr_data["checklist"],
+            sec_items=curr_data["sec_queries"]
+        )
         
         st.download_button(
-            label="📥 Download Full Regulatory Dossier with SEC Defense (.DOCX)",
-            data=buffer,
-            file_name=f"{device_name if device_name else 'Device'}_Regulatory_Dossier.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            label="📥 Download Enterprise Regulatory Dossier (.DOCX)",
+            data=docx_bytes,
+            file_name=f"Complivox_Dossier_{dev_name.replace(' ', '_') if dev_name else 'Device'}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            type="primary"
         )
     else:
-        st.info("Generate dossier first to view SEC scrutiny forecast and export documentation.")
+        st.info("💡 Compile the dossier first to view predicted SEC deficiencies and export regulatory documentation.")
