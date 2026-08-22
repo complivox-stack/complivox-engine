@@ -3,7 +3,6 @@ import pandas as pd
 import io
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
@@ -11,7 +10,7 @@ import pypdf
 
 # 1. Page Configuration
 st.set_page_config(
-    page_title="Complivox Global | Enterprise RegTech Platform",
+    page_title="Complivox Global | RegTech Platform",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -20,9 +19,10 @@ st.set_page_config(
 # Custom Corporate Styling
 st.markdown("""
 <style>
-    .main-header { font-size: 2.2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0px; }
-    .sub-header { font-size: 1rem; color: #4B5563; margin-bottom: 20px; }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; margin-right: 6px; }
+    .block-container { padding-left: 2rem; padding-right: 2rem; }
+    .main-header { font-size: 2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0px; }
+    .sub-header { font-size: 0.95rem; color: #4B5563; margin-bottom: 18px; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem; margin-right: 6px; margin-bottom: 6px; }
     .badge-blue { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
 </style>
 """, unsafe_allow_html=True)
@@ -115,11 +115,15 @@ DEMO_DEVICES = {
 
 RISK_CLASSES = ["Class A (Low)", "Class B (Low-Med)", "Class C (Mod-High)", "Class D (High)"]
 
-# State Initialization
+# Persistent State Management
 if 'dev_name' not in st.session_state:
     st.session_state.dev_name = ""
+if 'ind_use' not in st.session_state:
     st.session_state.ind_use = ""
+if 'risk_idx' not in st.session_state:
     st.session_state.risk_idx = 0
+if 'compiled' not in st.session_state:
+    st.session_state.compiled = False
 
 def on_demo_select():
     choice = st.session_state.demo_picker
@@ -128,6 +132,7 @@ def on_demo_select():
         st.session_state.dev_name = data["name"]
         st.session_state.ind_use = data["use"]
         st.session_state.risk_idx = RISK_CLASSES.index(data["class"])
+        st.session_state.compiled = True
 
 def extract_text_from_pdf(uploaded_file):
     try:
@@ -242,12 +247,12 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
     return out_buf
 
 # Sidebar UI
-st.sidebar.markdown("### 🏛️ Complivox Global")
+st.sidebar.markdown("### Complivox Global")
 selected_jurisdiction = st.sidebar.selectbox("Active Jurisdiction", list(JURISDICTION_CONFIGS.keys()))
 st.sidebar.markdown("---")
-st.sidebar.selectbox("⚡ 1-Click Sample Pre-loader:", list(DEMO_DEVICES.keys()), key="demo_picker", on_change=on_demo_select)
+st.sidebar.selectbox("Sample Pre-loader:", list(DEMO_DEVICES.keys()), key="demo_picker", on_change=on_demo_select)
 st.sidebar.markdown("---")
-st.sidebar.info("🛡️ **Enterprise Regulatory Engine**\nDirect statutory synthesis across CDSCO, FDA & MDR databases.")
+st.sidebar.info("Enterprise Regulatory Engine: Direct statutory synthesis across CDSCO, FDA & MDR databases.")
 
 # Main Body
 st.markdown('<p class="main-header">Complivox Regulatory Intelligence Platform</p>', unsafe_allow_html=True)
@@ -256,40 +261,43 @@ st.markdown(f'<p class="sub-header">Active Statutory Framework: <b>{selected_jur
 curr_data = JURISDICTION_CONFIGS[selected_jurisdiction]
 
 tab_build, tab_audit, tab_sec = st.tabs([
-    "📋 Submission Dossier Builder",
-    "🔍 Statutory Gap Audit",
-    "⚖️ SEC Scrutiny & RTQ Defense"
+    "Submission Dossier Builder",
+    "Statutory Gap Audit",
+    "SEC Scrutiny & RTQ Defense"
 ])
 
 with tab_build:
-    st.markdown("##### 📁 Client Document Ingestion (Optional)")
+    st.markdown("##### Client Document Ingestion (Optional)")
     uploaded_pdf = st.file_uploader("Upload Device Master File / Technical Summary (PDF)", type=["pdf"], help="Upload PDF to auto-extract technical parameters and indications.")
     
     if uploaded_pdf is not None:
         extracted = extract_text_from_pdf(uploaded_pdf)
         if extracted and not extracted.startswith("Error"):
-            st.success(f"✅ Successfully ingested `{uploaded_pdf.name}` ({len(extracted.split())} words parsed)")
+            st.success(f"Successfully ingested `{uploaded_pdf.name}` ({len(extracted.split())} words parsed)")
             if not st.session_state.dev_name:
                 st.session_state.dev_name = uploaded_pdf.name.replace(".pdf", "")
             if not st.session_state.ind_use:
                 st.session_state.ind_use = extracted[:400].strip() + "..."
+            st.session_state.compiled = True
     
     col_a, col_b = st.columns(2)
-    dev_name = col_a.text_input("Medical Device Name", value=st.session_state.dev_name, placeholder="e.g. Compli-Hip Acetabular System")
+    st.session_state.dev_name = col_a.text_input("Medical Device Name", value=st.session_state.dev_name, placeholder="e.g. Compli-Hip Acetabular System")
     r_class = col_b.selectbox("Device Risk Classification", RISK_CLASSES, index=st.session_state.risk_idx)
-    intended_use = st.text_area("Intended Purpose / Indications for Clinical Use", value=st.session_state.ind_use, height=95)
+    st.session_state.ind_use = st.text_area("Intended Purpose / Indications for Clinical Use", value=st.session_state.ind_use, height=95)
     
     st.write("**Applicable Statutory Portals & Submission Forms:**")
     badges_html = " ".join([f'<span class="badge badge-blue">{f}</span>' for f in curr_data["forms"]])
     st.markdown(badges_html, unsafe_allow_html=True)
     st.write("")
     
-    if st.button("🚀 Compile Regulatory Intelligence Dossier", type="primary"):
+    if st.button("Compile Regulatory Intelligence Dossier", type="primary"):
         st.session_state.compiled = True
         st.success("Dossier compiled successfully against statutory regulations.")
 
+is_ready = st.session_state.compiled or bool(st.session_state.dev_name)
+
 with tab_audit:
-    if st.session_state.get('compiled'):
+    if is_ready:
         st.subheader("Statutory Compliance & Readiness Scorecard")
         m1, m2, m3 = st.columns(3)
         m1.metric("Audit Readiness Index", "84%", "Passing Grade")
@@ -299,15 +307,15 @@ with tab_audit:
         st.write("### Mandatory Document Gap Matrix")
         st.dataframe(pd.DataFrame(curr_data["checklist"]), use_container_width=True, hide_index=True)
     else:
-        st.info("💡 Fill the device details (or upload PDF) and click **'Compile Regulatory Intelligence Dossier'** to unlock the audit matrix.")
+        st.info("Fill the device details (or select a demo / upload PDF) and compile to unlock the audit matrix.")
 
 with tab_sec:
-    if st.session_state.get('compiled'):
+    if is_ready:
         st.subheader("Subject Expert Committee (SEC) Deficiency Forecast")
         st.write("Predicted regulatory objections & recommended response strategies (RTQ):")
         
         for idx, item in enumerate(curr_data["sec_queries"], 1):
-            with st.expander(f"⚠️ Deficiency #{idx}: {item['deficiency']}  [{item['risk_level']}]", expanded=True):
+            with st.expander(f"Deficiency #{idx}: {item['deficiency']}  [{item['risk_level']}]", expanded=True):
                 st.markdown(f"**Statutory Standard:** `{item['statutory_reference']}`")
                 st.info(f"**Recommended Defense Strategy:** {item['recommended_defense']}")
         
@@ -321,20 +329,20 @@ with tab_sec:
         st.dataframe(pd.DataFrame(predicate_data), use_container_width=True, hide_index=True)
         
         docx_bytes = generate_styled_docx(
-            name=dev_name,
+            name=st.session_state.dev_name,
             juris=selected_jurisdiction,
             r_class=r_class,
-            use=intended_use,
+            use=st.session_state.ind_use,
             checklist=curr_data["checklist"],
             sec_items=curr_data["sec_queries"]
         )
         
         st.download_button(
-            label="📥 Download Enterprise Regulatory Dossier (.DOCX)",
+            label="Download Enterprise Regulatory Dossier (.DOCX)",
             data=docx_bytes,
-            file_name=f"Complivox_Dossier_{dev_name.replace(' ', '_') if dev_name else 'Device'}.docx",
+            file_name=f"Complivox_Dossier_{st.session_state.dev_name.replace(' ', '_') if st.session_state.dev_name else 'Device'}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             type="primary"
         )
     else:
-        st.info("💡 Compile the dossier first to view predicted SEC deficiencies and export regulatory documentation.")
+        st.info("Fill device details first to view predicted SEC deficiencies and export regulatory documentation.")
