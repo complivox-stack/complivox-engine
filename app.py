@@ -16,15 +16,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Enterprise SaaS CSS
+# Custom Corporate CSS
 st.markdown("""
 <style>
-    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; padding-left: 2rem; padding-right: 2rem; }
-    .main-header { font-size: 1.9rem; font-weight: 700; color: #0F172A; margin-bottom: 2px; }
-    .sub-header { font-size: 0.9rem; color: #64748B; margin-bottom: 16px; }
     .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; margin-right: 6px; margin-bottom: 6px; }
     .badge-blue { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
-    .top-bar { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px 18px; margin-bottom: 18px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -116,7 +112,7 @@ DEMO_DEVICES = {
 
 RISK_CLASSES = ["Class A (Low)", "Class B (Low-Med)", "Class C (Mod-High)", "Class D (High)"]
 
-# State Management
+# State Initialization
 if 'dev_name' not in st.session_state:
     st.session_state.dev_name = ""
 if 'ind_use' not in st.session_state:
@@ -247,7 +243,7 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
     return out_buf
 
 # 3. Sidebar UI
-st.sidebar.markdown("### Complivox Global")
+st.sidebar.title("Complivox Global")
 selected_jurisdiction = st.sidebar.selectbox("Active Jurisdiction", list(JURISDICTION_CONFIGS.keys()))
 st.sidebar.markdown("---")
 st.sidebar.selectbox("Sample Pre-loader:", list(DEMO_DEVICES.keys()), key="demo_picker", on_change=on_demo_select)
@@ -256,8 +252,8 @@ st.sidebar.markdown("---")
 curr_data = JURISDICTION_CONFIGS[selected_jurisdiction]
 is_ready = st.session_state.compiled or bool(st.session_state.dev_name)
 
-# Sidebar Quick Action Card
-st.sidebar.markdown("#### Dossier Status")
+# Sidebar Action & Status
+st.sidebar.subheader("Dossier Status")
 if is_ready:
     st.sidebar.success("Audit & SEC Defense Ready")
     docx_bytes = generate_styled_docx(
@@ -277,19 +273,19 @@ if is_ready:
         use_container_width=True
     )
 else:
-    st.sidebar.info("Awaiting compilation...")
+    st.sidebar.info("Awaiting input data...")
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Enterprise Regulatory Intelligence Engine")
+st.sidebar.caption("Direct statutory synthesis across CDSCO, FDA & MDR databases.")
 
-# 4. Top Header & Action Bar
-col_h1, col_h2 = st.columns([3, 1])
-with col_h1:
-    st.markdown('<p class="main-header">Complivox Regulatory Intelligence Platform</p>', unsafe_allow_html=True)
-    st.markdown(f'<p class="sub-header">Active Statutory Framework: <b>{selected_jurisdiction}</b></p>', unsafe_allow_html=True)
-
-with col_h2:
+# 4. Main Page Header
+header_col1, header_col2 = st.columns([3, 1])
+with header_col1:
+    st.title("Complivox Regulatory Intelligence Platform")
+    st.markdown(f"**Enterprise Statutory Compliance Engine** | Active Jurisdiction: `{selected_jurisdiction}`")
+with header_col2:
     if is_ready:
+        st.write("")
         st.download_button(
             label="Download Dossier (.DOCX)",
             data=docx_bytes,
@@ -307,7 +303,7 @@ tab_build, tab_audit, tab_sec = st.tabs([
 ])
 
 with tab_build:
-    st.markdown("##### Client Document Ingestion (Optional)")
+    st.subheader("Client Document Ingestion (Optional)")
     uploaded_pdf = st.file_uploader("Upload Device Master File / Technical Summary (PDF)", type=["pdf"], help="Upload PDF to auto-extract technical parameters and indications.")
     
     if uploaded_pdf is not None:
@@ -320,6 +316,8 @@ with tab_build:
                 st.session_state.ind_use = extracted[:400].strip() + "..."
             st.session_state.compiled = True
     
+    st.markdown("---")
+    st.subheader("Target Device Parameters")
     col_a, col_b = st.columns(2)
     st.session_state.dev_name = col_a.text_input("Medical Device Name", value=st.session_state.dev_name, placeholder="e.g. Compli-Hip Acetabular System")
     r_class = col_b.selectbox("Device Risk Classification", RISK_CLASSES, index=st.session_state.risk_idx)
