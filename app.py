@@ -10,20 +10,21 @@ import pypdf
 
 # 1. Page Configuration
 st.set_page_config(
-    page_title="Complivox Global | RegTech Platform",
+    page_title="Complivox Global | Enterprise RegTech Platform",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Corporate Styling
+# Enterprise SaaS CSS
 st.markdown("""
 <style>
-    .block-container { padding-left: 2rem; padding-right: 2rem; }
-    .main-header { font-size: 2rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0px; }
-    .sub-header { font-size: 0.95rem; color: #4B5563; margin-bottom: 18px; }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: 600; font-size: 0.8rem; margin-right: 6px; margin-bottom: 6px; }
+    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; padding-left: 2rem; padding-right: 2rem; }
+    .main-header { font-size: 1.9rem; font-weight: 700; color: #0F172A; margin-bottom: 2px; }
+    .sub-header { font-size: 0.9rem; color: #64748B; margin-bottom: 16px; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-weight: 600; font-size: 0.8rem; margin-right: 6px; margin-bottom: 6px; }
     .badge-blue { background-color: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+    .top-bar { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px 18px; margin-bottom: 18px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,7 +116,7 @@ DEMO_DEVICES = {
 
 RISK_CLASSES = ["Class A (Low)", "Class B (Low-Med)", "Class C (Mod-High)", "Class D (High)"]
 
-# Persistent State Management
+# State Management
 if 'dev_name' not in st.session_state:
     st.session_state.dev_name = ""
 if 'ind_use' not in st.session_state:
@@ -153,7 +154,6 @@ def set_cell_bg(cell, fill_hex):
 
 def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
     doc = Document()
-    
     for sec in doc.sections:
         sec.top_margin = Inches(0.75)
         sec.bottom_margin = Inches(0.75)
@@ -217,7 +217,7 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
 
     doc.add_paragraph().paragraph_format.space_after = Pt(10)
 
-    # 3. SEC Defense Boxes
+    # 3. SEC Defense
     doc.add_heading("3. Subject Expert Committee (SEC) Defense & Response (RTQ)", level=2)
     for idx, q in enumerate(sec_items, 1):
         ob_box = doc.add_table(rows=3, cols=1)
@@ -246,20 +246,60 @@ def generate_styled_docx(name, juris, r_class, use, checklist, sec_items):
     out_buf.seek(0)
     return out_buf
 
-# Sidebar UI
+# 3. Sidebar UI
 st.sidebar.markdown("### Complivox Global")
 selected_jurisdiction = st.sidebar.selectbox("Active Jurisdiction", list(JURISDICTION_CONFIGS.keys()))
 st.sidebar.markdown("---")
 st.sidebar.selectbox("Sample Pre-loader:", list(DEMO_DEVICES.keys()), key="demo_picker", on_change=on_demo_select)
 st.sidebar.markdown("---")
-st.sidebar.info("Enterprise Regulatory Engine: Direct statutory synthesis across CDSCO, FDA & MDR databases.")
-
-# Main Body
-st.markdown('<p class="main-header">Complivox Regulatory Intelligence Platform</p>', unsafe_allow_html=True)
-st.markdown(f'<p class="sub-header">Active Statutory Framework: <b>{selected_jurisdiction}</b></p>', unsafe_allow_html=True)
 
 curr_data = JURISDICTION_CONFIGS[selected_jurisdiction]
+is_ready = st.session_state.compiled or bool(st.session_state.dev_name)
 
+# Sidebar Quick Action Card
+st.sidebar.markdown("#### Dossier Status")
+if is_ready:
+    st.sidebar.success("Audit & SEC Defense Ready")
+    docx_bytes = generate_styled_docx(
+        name=st.session_state.dev_name,
+        juris=selected_jurisdiction,
+        r_class=RISK_CLASSES[st.session_state.risk_idx],
+        use=st.session_state.ind_use,
+        checklist=curr_data["checklist"],
+        sec_items=curr_data["sec_queries"]
+    )
+    st.sidebar.download_button(
+        label="Download Dossier (.DOCX)",
+        data=docx_bytes,
+        file_name=f"Complivox_Dossier_{st.session_state.dev_name.replace(' ', '_') if st.session_state.dev_name else 'Device'}.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        type="primary",
+        use_container_width=True
+    )
+else:
+    st.sidebar.info("Awaiting compilation...")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Enterprise Regulatory Intelligence Engine")
+
+# 4. Top Header & Action Bar
+col_h1, col_h2 = st.columns([3, 1])
+with col_h1:
+    st.markdown('<p class="main-header">Complivox Regulatory Intelligence Platform</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="sub-header">Active Statutory Framework: <b>{selected_jurisdiction}</b></p>', unsafe_allow_html=True)
+
+with col_h2:
+    if is_ready:
+        st.download_button(
+            label="Download Dossier (.DOCX)",
+            data=docx_bytes,
+            file_name=f"Complivox_Dossier_{st.session_state.dev_name.replace(' ', '_') if st.session_state.dev_name else 'Device'}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            type="primary",
+            use_container_width=True
+        )
+
+# 5. Core Navigation Tabs
 tab_build, tab_audit, tab_sec = st.tabs([
     "Submission Dossier Builder",
     "Statutory Gap Audit",
@@ -290,11 +330,11 @@ with tab_build:
     st.markdown(badges_html, unsafe_allow_html=True)
     st.write("")
     
-    if st.button("Compile Regulatory Intelligence Dossier", type="primary"):
-        st.session_state.compiled = True
-        st.success("Dossier compiled successfully against statutory regulations.")
-
-is_ready = st.session_state.compiled or bool(st.session_state.dev_name)
+    col_btn1, col_btn2 = st.columns([1, 4])
+    with col_btn1:
+        if st.button("Compile Dossier", type="primary", use_container_width=True):
+            st.session_state.compiled = True
+            st.success("Dossier compiled successfully against statutory regulations.")
 
 with tab_audit:
     if is_ready:
@@ -327,22 +367,5 @@ with tab_sec:
             "Predicate Standard Device": ["Ti-6Al-4V Standard", "Gamma Irradiation", "ISO 10993 Compliant", "2 Years Real-Time Certified"]
         }
         st.dataframe(pd.DataFrame(predicate_data), use_container_width=True, hide_index=True)
-        
-        docx_bytes = generate_styled_docx(
-            name=st.session_state.dev_name,
-            juris=selected_jurisdiction,
-            r_class=r_class,
-            use=st.session_state.ind_use,
-            checklist=curr_data["checklist"],
-            sec_items=curr_data["sec_queries"]
-        )
-        
-        st.download_button(
-            label="Download Enterprise Regulatory Dossier (.DOCX)",
-            data=docx_bytes,
-            file_name=f"Complivox_Dossier_{st.session_state.dev_name.replace(' ', '_') if st.session_state.dev_name else 'Device'}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            type="primary"
-        )
     else:
         st.info("Fill device details first to view predicted SEC deficiencies and export regulatory documentation.")
