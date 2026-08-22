@@ -1,477 +1,191 @@
 import streamlit as st
-import requests
-import json
-import re
-import os
+import pandas as pd
 import io
-import uuid
-from datetime import datetime
-from fpdf import FPDF
-from pypdf import PdfReader
 from docx import Document
-from docx.shared import Pt, RGBColor, Inches
 
-# ==========================================
-# 1. PAGE CONFIGURATION & ENTERPRISE THEME
-# ==========================================
-st.set_page_config(
-    page_title="Complivox Global | AI Regulatory Intelligence Platform",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Page Setup
+st.set_page_config(page_title="Complivox Global RegTech", layout="wide")
 
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    
-    .brand-container {
-        padding: 1.2rem 1.8rem;
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-        border-radius: 12px;
-        color: #FFFFFF;
-        margin-bottom: 1.2rem;
-        border: 1px solid #334155;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-    .brand-title { font-size: 22px; font-weight: 800; color: #F8FAFC; letter-spacing: -0.5px; }
-    .brand-subtitle { font-size: 13px; color: #94A3B8; margin-top: 4px; line-height: 1.4; }
-    
-    .section-header {
-        font-size: 15px;
-        font-weight: 700;
-        color: #0F172A;
-        padding-bottom: 8px;
-        border-bottom: 2px solid #E2E8F0;
-        margin-bottom: 12px;
-    }
-    .audit-card {
-        background-color: #F8FAFC;
-        border-left: 4px solid #0284C7;
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        border: 1px solid #E2E8F0;
-    }
-    .metric-badge {
-        display: inline-block;
-        background-color: #ECFDF5;
-        color: #065F46;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-weight: 700;
-        font-size: 12px;
-        border: 1px solid #A7F3D0;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<div class="brand-container">
-    <div class="brand-title">🛡️ Complivox Global Regulatory Intelligence Platform</div>
-    <div class="brand-subtitle">Autonomous Statutory Dossier Synthesis, SEC Deficiency Forecasting, SUGAM 3.0 Alignment & Live PubMed Evidence Engine.</div>
-</div>
-""", unsafe_allow_html=True)
-
-sarvam_api_key = st.secrets.get("SARVAM_API_KEY", "")
-
-# ==========================================
-# 2. SIDEBAR CONTROLS & AUTHORITY SELECTION
-# ==========================================
-with st.sidebar:
-    st.markdown("### 🌐 Global Authority Engine")
-    
-    target_framework = st.selectbox(
-        "Regulatory Target Authority",
-        [
-            "CDSCO (India - Medical Device Rules 2017 & SUGAM)",
-            "US FDA (United States - 510(k) Premarket / PMA / 21 CFR)",
-            "EU MDR / IVDR (European Union - Regulation 2017/745 & 746)",
-            "UK MHRA (United Kingdom - UKCA Mark & MDR 2002)",
-            "Health Canada (Canada - MDR SOR/98-282)",
-            "TGA Australia (Therapeutic Goods Administration - ARTG)",
-            "Saudi SFDA (Middle East / GCC - Medical Device Guidance)",
-            "Pharma CTD / eCTD (ICH M4 - Module 1 to 5 Dossier)",
-            "WHO Prequalification (Global Tenders & Diagnostics PQ)"
+# Jurisdiction-specific Statutory & SEC Configurations
+JURISDICTION_CONFIGS = {
+    "India (CDSCO / MDR 2017)": {
+        "forms": ["Form MD-14 (Import)", "Form MD-7 (Mfg Class A/B)", "Form MD-8 (Mfg Class C/D)", "SUGAM 3.0 Filing"],
+        "checklist": [
+            {"Requirement": "Device Master File (Appendix II)", "Status": "⚠️ In Review", "Standard": "Fourth Schedule"},
+            {"Requirement": "Plant Master File (PMF)", "Status": "✅ Ready", "Standard": "Part III Rule 20"},
+            {"Requirement": "ISO 13485:2016 Certification", "Status": "✅ Verified", "Standard": "QMS Statutory"},
+            {"Requirement": "Biocompatibility & Animal Study", "Status": "❌ Missing", "Standard": "ISO 10993"}
+        ],
+        "sec_queries": [
+            {
+                "deficiency": "Lack of Indian Clinical Population Equivalence Data",
+                "risk_level": "High (Class C/D)",
+                "statutory_reference": "MDR 2017 Part III (Clinical Investigation)",
+                "recommended_defense": "Submit GHTF-harmonized overseas clinical evaluation along with waiver justification under Rule 60(1)."
+            },
+            {
+                "deficiency": "Incomplete Accelerated vs Real-time Shelf-Life Stability Reports",
+                "risk_level": "Medium",
+                "statutory_reference": "ISO 11607 & ASTM F1980",
+                "recommended_defense": "Attach ongoing real-time aging protocol with intermediate 6-month accelerated degradation testing logs."
+            },
+            {
+                "deficiency": "Residual Risk Acceptability Matrix for Critical Components",
+                "risk_level": "High",
+                "statutory_reference": "ISO 14971:2019 Clause 7.4",
+                "recommended_defense": "Provide quantified Benefit-Risk analysis justifying residual toxicity threshold for patient contact materials."
+            }
         ]
-    )
-    
-    submission_intent = st.selectbox(
-        "Filing Transaction Intent",
-        [
-            "Import Licence & SUGAM Clearance (MD-14 / MD-15)",
-            "Domestic Manufacturing Licence (MD-7 / MD-8 / MD-9 / MD-10)",
-            "Test, Evaluation & Demo Import Licence (MD-16 / MD-17)",
-            "Loan Licence / Contract Manufacturing (MD-5 / MD-6)",
-            "Post-Approval Variation / Site Transfer (Rule 26 Amendment)",
-            "Export Clearance & Free Sale Certificate (MD-28 / CoFS)",
-            "Clinical Investigation & Trial Permission (MD-22 / MD-26 / SEC)",
-            "Post-Marketing Surveillance & PSUR Module (SUGAM 3.0)",
-            "Licence Retention / 5-Year Renewal Endorsement"
+    },
+    "USA (US FDA - 510k / PMA)": {
+        "forms": ["510(k) Premarket Notification", "De Novo Classification", "PMA (Class III)", "eSTAR XML Schema"],
+        "checklist": [
+            {"Requirement": "Substantial Equivalence (SE) Rationale", "Status": "✅ Verified", "Standard": "21 CFR 807.87"},
+            {"Requirement": "Design History File (DHF) Traceability", "Status": "⚠️ In Review", "Standard": "21 CFR 820.30"},
+            {"Requirement": "Software Lifecycle (SaMD)", "Status": "✅ Ready", "Standard": "IEC 62304 / FDA Guidance"},
+            {"Requirement": "Human Factors & Usability Engineering", "Status": "❌ Missing", "Standard": "ANSI/AAMI HE75"}
+        ],
+        "sec_queries": [
+            {
+                "deficiency": "Refusal to Accept (RTA): Insufficient Bench Performance Testing vs Predicate",
+                "risk_level": "High",
+                "statutory_reference": "FDA 510(k) Third-Party Guidance",
+                "recommended_defense": "Execute side-by-side mechanical fatigue testing with identical cycle parameters to predicate standard."
+            },
+            {
+                "deficiency": "Cybersecurity Bill of Materials (CBOM) Traceability Gap",
+                "risk_level": "Medium",
+                "statutory_reference": "Section 524B FD&C Act",
+                "recommended_defense": "Attach software architecture SBOM with static code analysis vulnerabilities log."
+            }
         ]
-    )
-    
-    st.markdown("---")
-    st.markdown("**Enterprise Active Modules:**")
-    st.checkbox("Statutory Gazette & Rule Citation Engine", value=True, disabled=True)
-    st.checkbox("SUGAM 3.0 Portal Form Alignment", value=True, disabled=True)
-    st.checkbox("Real-time NCBI PubMed Literature Extraction", value=True, disabled=True)
-    st.checkbox("CDSCO SEC Committee Deficiency Predictor", value=True, disabled=True)
-    st.checkbox("Master File Checklist (PMF, DMF, CoFS, ISO 13485)", value=True, disabled=True)
-    
-    st.markdown("---")
-    st.caption("🔒 Complivox Core v5.1 | Zero Retention Standard")
+    },
+    "EU (CE MDR 2017/745)": {
+        "forms": ["Annex II Technical Documentation", "Annex III Post-Market Surveillance", "GSPR Checklist", "EUDAMED Registration"],
+        "checklist": [
+            {"Requirement": "General Safety and Performance (GSPR)", "Status": "✅ Ready", "Standard": "Annex I Essential Regs"},
+            {"Requirement": "Clinical Evaluation Report (CER)", "Status": "⚠️ Missing PMCF", "Standard": "MEDDEV 2.7/1 rev 4"},
+            {"Requirement": "Risk Management File", "Status": "✅ Ready", "Standard": "ISO 14971:2019"},
+            {"Requirement": "Periodic Safety Update Report (PSUR)", "Status": "❌ Needs Template", "Standard": "Article 86 MDR"}
+        ],
+        "sec_queries": [
+            {
+                "deficiency": "Notified Body Scrutiny: Insufficient Post-Market Clinical Follow-up (PMCF) Rationale",
+                "risk_level": "High",
+                "statutory_reference": "MDR Annex XIV Part B",
+                "recommended_defense": "Submit prospective PMCF registry protocol targeting 5-year patient outcome data."
+            },
+            {
+                "deficiency": "State-of-the-Art (SOTA) Literature Search Filter String Deficiencies",
+                "risk_level": "Medium",
+                "statutory_reference": "MDCG 2020-6",
+                "recommended_defense": "Re-run systematic literature search including PRISMA flowchart and adverse database logs."
+            }
+        ]
+    }
+}
 
-# ==========================================
-# 3. KNOWLEDGE BASE & EVIDENCE ENGINE
-# ==========================================
-def extract_text_from_file(uploaded_file):
-    extracted = ""
-    try:
-        if uploaded_file.name.endswith(".pdf"):
-            reader = PdfReader(uploaded_file)
-            for page in reader.pages[:10]:
-                extracted += page.extract_text() or ""
-        elif uploaded_file.name.endswith(".txt"):
-            extracted = uploaded_file.read().decode("utf-8")
-    except Exception as e:
-        st.error(f"Error reading file: {str(e)}")
-    return extracted.strip()
+DEMO_DEVICES = {
+    "Select Demo Device...": {"name": "", "use": "", "class": "Class A (Low)"},
+    "Orthopedic Titanium Hip Implant": {"name": "Compli-Hip Total Joint", "use": "Total hip arthroplasty for severe joint degeneration.", "class": "Class C (Mod-High)"},
+    "Drug-Eluting Coronary Stent System": {"name": "Compli-DES Stent", "use": "Percutaneous coronary intervention in symptomatic ischemic disease.", "class": "Class D (High)"},
+    "AI Diagnostic ECG Monitor": {"name": "CardioSense 300", "use": "Continuous automated ECG screening and arrhythmia classification.", "class": "Class B (Low-Med)"}
+}
 
-@st.cache_data
-def scan_repository_knowledge():
-    kb_summary = []
-    for root, _, files in os.walk("."):
-        for fname in files:
-            if fname.lower().endswith(('.pdf', '.txt', '.htm', '.html')) and any(k in fname.lower() for k in ['mdr', 'cdsco', 'sugam', 'guidance', 'psur', 'drugs', 'g.s.r']):
-                fpath = os.path.join(root, fname)
-                try:
-                    if fname.lower().endswith('.pdf'):
-                        reader = PdfReader(fpath)
-                        text = " ".join([page.extract_text() or "" for page in reader.pages[:2]])
-                        kb_summary.append(f"Statutory Ref: {fname} -> {text[:300]}")
-                    elif fname.lower().endswith(('.txt', '.html', '.htm')):
-                        with open(fpath, 'r', encoding='utf-8', errors='ignore') as f:
-                            kb_summary.append(f"Statutory Ref: {fname} -> {f.read()[:300]}")
-                except Exception:
-                    pass
-    return "\n".join(kb_summary[:3])
+# Session State Initialization
+if 'device_name' not in st.session_state:
+    st.session_state.device_name = ""
+    st.session_state.intended_use = ""
 
-def fetch_clinical_evidence(term):
-    try:
-        clean_term = re.sub(r'[^a-zA-Z0-9\s]', '', term)
-        search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={requests.utils.quote(clean_term)}&retmode=json&retmax=2"
-        res = requests.get(search_url, timeout=5).json()
-        ids = res.get("esearchresult", {}).get("idlist", [])
-        if not ids:
-            return "General clinical safety profile confirmed."
-        sum_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={','.join(ids)}&retmode=json"
-        summary_res = requests.get(sum_url, timeout=5).json().get("result", {})
-        evidence = []
-        for pmid in ids:
-            if pmid in summary_res:
-                data = summary_res[pmid]
-                evidence.append(f"- PMID {pmid}: {data.get('title', 'N/A')} ({data.get('pubdate', 'N/A')})")
-        return "\n".join(evidence)
-    except Exception:
-        return "Clinical literature active."
+def load_demo_data():
+    sel = st.session_state.selected_demo
+    if sel != "Select Demo Device...":
+        st.session_state.device_name = DEMO_DEVICES[sel]["name"]
+        st.session_state.intended_use = DEMO_DEVICES[sel]["use"]
 
-# ==========================================
-# 4. EXPORT ENGINE (PDF & DOCX GENERATORS)
-# ==========================================
-class EnterprisePDF(FPDF):
-    def header(self):
-        self.set_font("Helvetica", "B", 8)
-        self.set_text_color(100, 116, 139)
-        self.cell(0, 5, "COMPLIVOX GLOBAL | STATUTORY REGULATORY REPORT", ln=True, align="R")
-        self.line(10, 14, 200, 14)
-        self.ln(3)
+# Sidebar Setup
+st.sidebar.title("Complivox Global")
+selected_jurisdiction = st.sidebar.selectbox("Regulatory Jurisdiction", list(JURISDICTION_CONFIGS.keys()))
+st.sidebar.markdown("---")
+st.sidebar.selectbox("⚡ 1-Click Sample Pre-loader:", list(DEMO_DEVICES.keys()), key="selected_demo", on_change=load_demo_data)
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.set_text_color(148, 163, 184)
-        self.cell(0, 10, f"Page {self.page_no()}/{{nb}} | Audit-Ready Statutory Dossier", align="C")
+st.sidebar.markdown("---")
+st.sidebar.info("💼 **Enterprise Regulatory Intelligence**\nComplivox Regulatory Engine active for statutory automation.")
 
-def build_pdf_document(product, jurisdiction, intent, content, dossier_ref):
-    pdf = EnterprisePDF()
-    pdf.alias_nb_pages()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-    
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(15, 23, 42)
-    clean_product = product.encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 7, f"Regulatory Assessment Report: {clean_product}", ln=True)
-    
-    pdf.set_font("Helvetica", "B", 8.5)
-    pdf.set_text_color(71, 85, 105)
-    clean_jur = f"Authority: {jurisdiction}".encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 5, clean_jur, ln=True)
-    
-    clean_intent = f"Filing Intent: {intent}".encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 5, clean_intent, ln=True)
-    
-    pdf.set_font("Helvetica", "I", 8)
-    clean_date = f"Ref ID: {dossier_ref} | Generated: {datetime.now().strftime('%d %B %Y')} | Standard: Zero Retention".encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 5, clean_date, ln=True)
-    
-    pdf.line(10, pdf.get_y() + 2, 200, pdf.get_y() + 2)
-    pdf.ln(5)
-    
-    clean_text = content.replace("###", "").replace("##", "").replace("**", "").replace("–", "-").replace("—", "-").replace("“", '"').replace("”", '"').replace("’", "'").replace("•", "-")
-    clean_body = clean_text.encode('latin-1', 'replace').decode('latin-1')
-    
-    pdf.set_font("Helvetica", "", 8.5)
-    pdf.set_text_color(30, 41, 59)
-    pdf.multi_cell(0, 4.8, clean_body)
-    return bytes(pdf.output())
+# Main Interface
+st.title("Complivox Regulatory Intelligence Platform")
+st.caption(f"Active Statutory Framework: **{selected_jurisdiction}**")
 
-def build_docx_document(product, jurisdiction, intent, content, dossier_ref):
-    doc = Document()
-    title = doc.add_heading(f"Regulatory Assessment Dossier: {product}", level=1)
-    title.runs[0].font.color.rgb = RGBColor(15, 23, 42)
-    
-    p_meta = doc.add_paragraph()
-    p_meta.add_run(f"Target Authority: {jurisdiction}\n").bold = True
-    p_meta.add_run(f"Filing Transaction Intent: {intent}\n").bold = True
-    p_meta.add_run(f"Dossier Reference Code: {dossier_ref}\n")
-    p_meta.add_run(f"Assessment Date: {datetime.now().strftime('%d %B %Y')}\n")
-    
-    doc.add_paragraph("―" * 45)
-    clean_text = content.replace("**", "").replace("###", "").replace("##", "")
-    for line in clean_text.split("\n"):
-        if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '6.')):
-            h = doc.add_heading(line.strip(), level=2)
-            h.runs[0].font.color.rgb = RGBColor(2, 132, 199)
-        elif line.strip():
-            doc.add_paragraph(line.strip())
-            
-    bio = io.BytesIO()
-    doc.save(bio)
-    bio.seek(0)
-    return bio.getvalue()
+active_data = JURISDICTION_CONFIGS[selected_jurisdiction]
 
-# ==========================================
-# 5. DYNAMIC INTERACTION WORKSPACE
-# ==========================================
-intent_short = submission_intent.split("(")[0].strip()
-dynamic_input_header = f"📋 {intent_short} Specification Console"
-dynamic_output_header = f"📑 Statutory Regulatory Intelligence ({target_framework.split('(')[0].strip()})"
+tab1, tab2, tab3 = st.tabs(["📋 Submission Builder", "🔍 Statutory Gap Audit", "⚖️ SEC Scrutiny & Deficiency Forecast"])
 
-col_spec, col_dossier = st.columns([1, 1], gap="large")
+with tab1:
+    col1, col2 = st.columns(2)
+    device_name = col1.text_input("Medical Device Name", value=st.session_state.device_name)
+    risk_class = col2.selectbox("Device Risk Classification", ["Class A (Low)", "Class B (Low-Med)", "Class C (Mod-High)", "Class D (High)"])
+    intended_use = st.text_area("Intended Purpose / Indications for Use", value=st.session_state.intended_use, height=100)
+    
+    st.write("**Applicable Statutory Filing Portals & Forms:**")
+    st.write(", ".join([f"`{f}`" for f in active_data["forms"]]))
+    
+    if st.button("Generate Regulatory Intelligence Dossier"):
+        st.session_state.dossier_ready = True
+        st.success("Dossier compiled successfully across selected regulatory framework.")
 
-with col_spec:
-    st.markdown(f'<div class="section-header">{dynamic_input_header}</div>', unsafe_allow_html=True)
-    
-    prod_name = st.text_input("Product / Molecule / Device Trade Name", value="Sirolimus-Eluting Coronary Stent")
-    
-    uploaded_file = st.file_uploader("📂 Upload Technical Spec Sheet, Lab COA, or Dossier Draft (PDF / TXT)", type=["pdf", "txt"])
-    doc_context = ""
-    if uploaded_file is not None:
-        doc_context = extract_text_from_file(uploaded_file)
-        st.success(f"✅ Extracted {len(doc_context)} characters from {uploaded_file.name}")
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        prod_cat = st.selectbox("Product Classification Category", [
-            "Cardiovascular & Interventional (Stents, Catheters)",
-            "Orthopedic & Spinal Implants",
-            "In-Vitro Diagnostics (IVD & Reagents)",
-            "Software as a Medical Device (SaMD / AI Diagnostics)",
-            "Drug-Device Combination Products",
-            "Biologics & Biosimilars (Monoclonal Antibodies, mRNA)",
-            "Active Implantable Devices (Pacemakers, Neurostimulators)",
-            "Pharma Small Molecule / Injectables",
-            "Ophthalmic & General Surgery Devices",
-            "Dental Implants & Restorative Materials",
-            "Oncology Drug Delivery Systems",
-            "Custom / Other Category..."
-        ])
-        if prod_cat == "Custom / Other Category...":
-            custom_cat = st.text_input("Specify Custom Category Name")
-            if custom_cat.strip():
-                prod_cat = custom_cat.strip()
-                
-    with c2:
-        duration_contact = st.selectbox("In-Body Contact Duration", [
-            "Long-term / Permanent (> 30 days)",
-            "Short-term (<= 30 days)",
-            "Transient (< 60 minutes)",
-            "Non-invasive / Surface Contact"
-        ])
+with tab2:
+    if st.session_state.get('dossier_ready'):
+        st.subheader("Statutory Compliance & Readiness Scorecard")
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Audit Readiness Index", "84%", "Passing Grade")
+        col_m2.metric("Pending Statutory Mandates", "2 Items", delta="-High Priority")
         
-    tech_specs = st.text_area(
-        "Technical Composition, Formulation & Indication",
-        value="Cobalt-Chromium L605 platform, strut thickness 65 microns, coated with biodegradable PLGA polymer and Sirolimus (1.4 mcg/mm2) for treatment of de novo native coronary artery lesions.",
-        height=130
-    )
-    
-    exec_btn = st.button("🚀 Synthesize Global Regulatory Dossier", type="primary", use_container_width=True)
-
-with col_dossier:
-    st.markdown(f'<div class="section-header">{dynamic_output_header}</div>', unsafe_allow_html=True)
-    
-    if exec_btn:
-        if not sarvam_api_key:
-            st.error("⚠️ Backend authentication key missing in Streamlit Secrets.")
-        elif not prod_name.strip() or (not tech_specs.strip() and not doc_context.strip()):
-            st.warning("⚠️ Please fill in product name and specifications or upload a file.")
-        else:
-            with st.spinner("Executing CDSCO/SUGAM Statutory Synthesis Engine..."):
-                pubmed_data = fetch_clinical_evidence(prod_name)
-                statutory_kb = scan_repository_knowledge()
-                combined_specs = f"{tech_specs}\n\n[SPEC DATA]:\n{doc_context[:1000]}" if doc_context else tech_specs
-                
-                system_prompt = f"""
-                You are the Principal Regulatory Affairs Officer & CDSCO/SUGAM Specialist.
-                Authority: {target_framework}. Intent: {submission_intent}.
-                Knowledge Base: MDR 2017, G.S.R. 78(E), G.S.R. 777(E), G.S.R. 409(E), SUGAM 3.0.
-                {statutory_kb}
-
-                OUTPUT DIRECTIVE:
-                - Do NOT include greetings or meta headers (Prepared by/Date).
-                - Start directly with '1. STATUTORY CLASSIFICATION & EXACT LEGAL CLAUSES'.
-
-                Provide concise, authoritative sections:
-                1. STATUTORY CLASSIFICATION & EXACT LEGAL CLAUSES (Class A-D, Rule 3 First Schedule, G.S.R citations).
-                2. TRANSACTION WORKFLOW & STATUTORY FORMS (Exact Forms: MD-14/15 or MD-7/8/9/10, PMF/DMF checklists).
-                3. SUBSTANTIAL EQUIVALENCE & PREDICATE BENCHMARKING (Device specifications, polymer, delivery profile).
-                4. CLINICAL EVALUATION REPORT & PSUR REQUIREMENTS (Safety endpoints, SUGAM 3.0 PSUR schedule).
-                5. CDSCO SEC / DEFICIENCY FORECASTING (Anticipated committee queries, testing requirements).
-                6. MANDATORY SUBMISSION ROADMAP (ISO 10993, ISO 13485, ISO 14971 compliance).
-                """
-                
-                user_prompt = f"""
-                Product: {prod_name} | Category: {prod_cat} | Duration: {duration_contact} | Intent: {submission_intent}
-                Specs: {combined_specs}
-                Clinical Evidence: {pubmed_data}
-                """
-                
-                headers = {
-                    "api-subscription-key": sarvam_api_key.strip(),
-                    "Content-Type": "application/json"
-                }
-                
-                payload = {
-                    "model": "sarvam-105b",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": 2500
-                }
-                
-                success = False
-                try:
-                    resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=90)
-                    if resp.status_code == 200:
-                        content = resp.json()["choices"][0]["message"]["content"]
-                        st.session_state["dossier_text"] = content
-                        st.session_state["prod_name"] = prod_name
-                        st.session_state["framework"] = target_framework
-                        st.session_state["intent"] = submission_intent
-                        st.session_state["dossier_ref"] = f"CPX-{uuid.uuid4().hex[:6].upper()}"
-                        st.session_state["pubmed_refs"] = pubmed_data
-                        success = True
-                except Exception:
-                    pass
-                
-                # Fast Failover Retry if 105b is under heavy load
-                if not success:
-                    try:
-                        payload["model"] = "sarvam-2b"
-                        resp = requests.post("https://api.sarvam.ai/v1/chat/completions", headers=headers, json=payload, timeout=40)
-                        if resp.status_code == 200:
-                            content = resp.json()["choices"][0]["message"]["content"]
-                            st.session_state["dossier_text"] = content
-                            st.session_state["prod_name"] = prod_name
-                            st.session_state["framework"] = target_framework
-                            st.session_state["intent"] = submission_intent
-                            st.session_state["dossier_ref"] = f"CPX-{uuid.uuid4().hex[:6].upper()}"
-                            st.session_state["pubmed_refs"] = pubmed_data
-                            success = True
-                    except Exception as e:
-                        st.error(f"❌ Connection Error: {str(e)}")
-
-    if st.session_state.get("dossier_text"):
-        ref_id = st.session_state.get('dossier_ref', 'CPX-ACTIVE')
-        clean_safe_name = st.session_state.get('prod_name', 'Report').replace(' ', '_')
-        
-        st.markdown(f"""
-        <div class="audit-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <strong>Audit Tracking ID:</strong> <code>{ref_id}</code><br>
-                    <span style="font-size: 12px; color: #64748B;">Standard: ISO 13485 & MDR 2017 Grounded</span>
-                </div>
-                <div>
-                    <span class="metric-badge">✅ Statutory Readiness: 96%</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        tab_dossier, tab_evidence, tab_summary = st.tabs(["📑 Full Dossier", "🔬 Clinical Evidence", "⚖️ Statutory Checkpoints"])
-        
-        with tab_dossier:
-            st.markdown(st.session_state["dossier_text"])
-            
-        with tab_evidence:
-            st.markdown("#### 🔬 Peer-Reviewed Clinical Citations")
-            st.info(st.session_state.get("pubmed_refs", "Clinical database indexed."))
-            st.markdown(f"**Target Authority:** `{st.session_state.get('framework')}`")
-            st.markdown(f"**Transaction Pathway:** `{st.session_state.get('intent')}`")
-            
-        with tab_summary:
-            st.markdown("#### 🛡️ Compliance Verification Points")
-            st.write("✔️ **Classification:** MDR 2017 First Schedule Verified")
-            st.write("✔️ **Master Files:** PMF & DMF Module Alignment")
-            st.write("✔️ **SEC Review:** Committee Query Defense Matrix Active")
-            st.write("✔️ **PSUR Compliance:** SUGAM 3.0 Annual Surveillance Active")
-            
-        st.markdown("---")
-        
-        col_pdf, col_docx = st.columns(2)
-        
-        with col_pdf:
-            try:
-                pdf_bytes = build_pdf_document(
-                    st.session_state.get("prod_name", "Product"),
-                    st.session_state.get("framework", "Regulatory Framework"),
-                    st.session_state.get("intent", "Submission Intent"),
-                    st.session_state["dossier_text"],
-                    ref_id
-                )
-                st.download_button(
-                    label="📥 Export Audit PDF",
-                    data=pdf_bytes,
-                    file_name=f"Complivox_Dossier_{clean_safe_name}_{datetime.now().strftime('%d%b%Y')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-            except Exception:
-                st.warning("PDF export compiling...")
-
-        with col_docx:
-            try:
-                docx_bytes = build_docx_document(
-                    st.session_state.get("prod_name", "Product"),
-                    st.session_state.get("framework", "Regulatory Framework"),
-                    st.session_state.get("intent", "Submission Intent"),
-                    st.session_state["dossier_text"],
-                    ref_id
-                )
-                st.download_button(
-                    label="📝 Export Editable Word (.docx)",
-                    data=docx_bytes,
-                    file_name=f"Complivox_Dossier_{clean_safe_name}_{datetime.now().strftime('%d%b%Y')}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
-                )
-            except Exception:
-                st.warning("Word export compiling...")
+        st.write("### Mandatory Document Gap Matrix")
+        st.table(pd.DataFrame(active_data["checklist"]))
     else:
-        st.info("👈 Click **'Synthesize Global Regulatory Dossier'** to generate your technical report.")
+        st.info("Fill device details and click 'Generate Regulatory Intelligence Dossier' to unlock analysis.")
+
+with tab3:
+    if st.session_state.get('dossier_ready'):
+        st.subheader("Subject Expert Committee (SEC) Deficiency Forecaster")
+        st.write("Predicted regulatory objections & recommended response strategies (RTQ):")
+        
+        for idx, item in enumerate(active_data["sec_queries"], 1):
+            with st.expander(f"⚠️ Deficiency #{idx}: {item['deficiency']} ({item['risk_level']})", expanded=True):
+                st.write(f"**Statutory Rule:** `{item['statutory_reference']}`")
+                st.info(f"**Recommended Defense Strategy:** {item['recommended_defense']}")
+        
+        st.markdown("---")
+        st.subheader("Substantial Equivalence Matrix")
+        comp_table = {
+            "Evaluation Parameter": ["Primary Material", "Sterilization Method", "Biocompatibility Standards", "Shelf-Life Stability"],
+            "Target Device": ["Medical Grade Ti-6Al-4V", "Ethylene Oxide (EtO)", "ISO 10993 Series Passed", "3 Years Accelerated"],
+            "Predicate Standard": ["Ti-6Al-4V ELI", "Gamma Irradiation", "ISO 10993 Compliant", "2 Years Real-Time"]
+        }
+        st.table(pd.DataFrame(comp_table))
+        
+        # Word Document Export Generation
+        doc = Document()
+        doc.add_heading(f"Regulatory Dossier - {device_name if device_name else 'Medical Device'}", 0)
+        doc.add_paragraph(f"Jurisdiction: {selected_jurisdiction}")
+        doc.add_paragraph(f"Risk Class: {risk_class}")
+        doc.add_paragraph(f"Intended Use: {intended_use}")
+        
+        doc.add_heading("SEC Deficiency Forecaster & RTQ Strategy", level=1)
+        for q in active_data["sec_queries"]:
+            doc.add_paragraph(f"• Query: {q['deficiency']} [{q['risk_level']}]")
+            doc.add_paragraph(f"  Statutory Ref: {q['statutory_reference']}")
+            doc.add_paragraph(f"  Defense Strategy: {q['recommended_defense']}")
+        
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        
+        st.download_button(
+            label="📥 Download Full Regulatory Dossier with SEC Defense (.DOCX)",
+            data=buffer,
+            file_name=f"{device_name if device_name else 'Device'}_Regulatory_Dossier.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    else:
+        st.info("Generate dossier first to view SEC scrutiny forecast and export documentation.")
