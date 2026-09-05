@@ -148,14 +148,15 @@ def run_regulatory_audit(text, filing_type):
     score = max(score, 10)
     return score, objections, defenses, pubmed_queries
 
-# --- PDF Export Class ---
+# --- PDF Export Class (Proper Margin Fit) ---
 class ComplivoxPDF(FPDF):
     def header(self):
         self.set_fill_color(15, 23, 42)
         self.rect(0, 0, 210, 16, 'F')
         self.set_font("Helvetica", 'B', 10)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 8, "COMPLIVOX GLOBAL | STATUTORY PRE-SUBMISSION DEFENSE DOSSIER", ln=True)
+        self.set_xy(12, 4)
+        self.cell(186, 8, "COMPLIVOX GLOBAL | STATUTORY PRE-SUBMISSION DEFENSE DOSSIER", ln=True)
         self.ln(6)
 
     def footer(self):
@@ -166,10 +167,11 @@ class ComplivoxPDF(FPDF):
 
 def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash):
     pdf = ComplivoxPDF(format='A4')
+    pdf.set_margins(12, 18, 12)
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    pdf.set_font("Helvetica", 'B', 13)
+    pdf.set_font("Helvetica", 'B', 12)
     pdf.set_text_color(15, 23, 42)
     pdf.cell(0, 7, "Executive Regulatory Pre-Submission Audit", ln=True)
 
@@ -179,23 +181,27 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
     pdf.cell(0, 4, f"Tamper-Proof Audit Hash (SHA-256): {file_hash[:28]}...", ln=True)
     pdf.ln(3)
 
-    # Score Box
+    # Score Box (Clean Margins)
+    current_y = pdf.get_y()
     pdf.set_fill_color(241, 245, 249)
-    pdf.rect(10, pdf.get_y(), 190, 12, 'F')
-    pdf.set_font("Helvetica", 'B', 9)
+    pdf.rect(12, current_y, 186, 11, 'F')
+    
+    pdf.set_font("Helvetica", 'B', 8.5)
     pdf.set_text_color(15, 23, 42)
-    pdf.set_xy(14, pdf.get_y() + 2)
-    pdf.cell(90, 8, f"Pre-Submission Scrutiny Readiness: {score}/100")
-    pdf.set_xy(120, pdf.get_y())
-    pdf.cell(70, 8, "STATUS: HIGH SEC SCRUTINY DEFICIT" if score < 70 else "STATUS: AUDIT DEFENSIBLE", align='R')
-    pdf.ln(10)
+    pdf.set_xy(15, current_y + 2)
+    pdf.cell(85, 7, f"Pre-Submission Scrutiny Readiness: {score}/100")
+    
+    status_str = "STATUS: HIGH DEFENSE DEFICIT" if score < 70 else "STATUS: AUDIT DEFENSIBLE"
+    pdf.set_xy(105, current_y + 2)
+    pdf.cell(90, 7, status_str, align='R')
+    pdf.set_xy(12, current_y + 14)
 
-    # Objections
+    # Flagged Objections
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(185, 28, 28)
     pdf.cell(0, 5, "FLAGGED STATUTORY GAPS & ANTICIPATED COMMITTEE OBJECTIONS", ln=True)
     pdf.set_draw_color(226, 232, 240)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.line(12, pdf.get_y(), 198, pdf.get_y())
     pdf.ln(2)
 
     for obj in objections:
@@ -203,36 +209,37 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
         pdf.set_text_color(30, 41, 59)
         pdf.cell(0, 4, f"[{obj['code']}] {obj['rule']}", ln=True)
         pdf.set_font("Helvetica", '', 7.5)
-        pdf.multi_cell(0, 3.8, f"Deficiency: {obj['issue']}")
+        pdf.multi_cell(186, 3.8, f"Deficiency: {obj['issue']}")
         pdf.ln(1)
 
     pdf.ln(2)
-    # Defenses
+    # Pre-emptive Defenses
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(22, 101, 52)
     pdf.cell(0, 5, "PRE-EMPTIVE STATUTORY DEFENSE STRATEGY (RTQ PROTOCOL)", ln=True)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.line(12, pdf.get_y(), 198, pdf.get_y())
     pdf.ln(2)
 
     for idx, d in enumerate(defenses, 1):
         pdf.set_font("Helvetica", '', 7.5)
         pdf.set_text_color(30, 41, 59)
-        pdf.multi_cell(0, 3.8, f"{idx}. {d}")
+        pdf.multi_cell(186, 3.8, f"{idx}. {d}")
         pdf.ln(1)
 
+    # PubMed Citations
     if citations:
         pdf.ln(2)
         pdf.set_font("Helvetica", 'B', 9)
         pdf.set_text_color(30, 58, 138)
         pdf.cell(0, 5, "NCBI / PUBMED CLINICAL & TOXICOLOGICAL CITATIONS", ln=True)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.line(12, pdf.get_y(), 198, pdf.get_y())
         pdf.ln(2)
         for cit in citations:
             pdf.set_font("Helvetica", 'B', 7)
             pdf.set_text_color(30, 41, 59)
             pdf.cell(0, 3.5, f"PMID {cit['pmid']} | {cit['source']}", ln=True)
             pdf.set_font("Helvetica", '', 7)
-            pdf.multi_cell(0, 3.5, f"Title: {cit['title']}")
+            pdf.multi_cell(186, 3.5, f"Title: {cit['title']}")
             pdf.ln(1)
 
     return bytes(pdf.output())
