@@ -5,12 +5,12 @@ from datetime import datetime
 from fpdf import FPDF
 from pypdf import PdfReader
 
-# --- Page Setup ---
+# --- Page Setup (Collapsed Sidebar for Mobile Optimization) ---
 st.set_page_config(
     page_title="Complivox Global | Regulatory Intelligence Engine",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="auto"
+    initial_sidebar_state="collapsed"
 )
 
 # --- Enterprise CSS Styling ---
@@ -25,11 +25,12 @@ st.markdown("""
         margin-bottom: 20px;
     }
     .guide-step {
-        background: #f1f5f9;
-        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        border: 1.5px solid #0284c7;
         border-radius: 8px;
-        padding: 12px;
+        padding: 10px;
         text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     }
     .sec-card {
         background-color: #fef2f2;
@@ -101,7 +102,7 @@ def run_regulatory_audit(text, filing_type):
     pubmed_queries = []
     score = 100
 
-    # Zone IVb Check
+    # Zone IVb Stability Scrutiny
     if not any(k in content for k in ["zone ivb", "30°c/75% rh", "30c/75%rh", "30 deg"]):
         objections.append({
             "code": "CDSCO-STAB-01",
@@ -111,7 +112,7 @@ def run_regulatory_audit(text, filing_type):
         defenses.append("Submit 6-month accelerated data backed by an immediate Zone IVb 12-month real-time testing commitment protocol.")
         score -= 25
 
-    # Nitrosamines / ICH M7 Check
+    # Nitrosamines / ICH M7 Scrutiny
     if not any(k in content for k in ["nitrosamine", "ich m7", "purge", "ndma"]):
         objections.append({
             "code": "USFDA-TOX-04",
@@ -122,7 +123,7 @@ def run_regulatory_audit(text, filing_type):
         pubmed_queries.append("nitrosamine impurity risk assessment pharmaceuticals")
         score -= 30
 
-    # Device Biocompatibility Check
+    # Device Biocompatibility Scrutiny
     if "MD-14" in filing_type:
         if not any(k in content for k in ["iso 10993", "cytotoxicity", "biocompatibility"]):
             objections.append({
@@ -134,7 +135,7 @@ def run_regulatory_audit(text, filing_type):
             pubmed_queries.append("ISO 10993 biocompatibility medical devices")
             score -= 20
 
-    # Elemental Impurities
+    # Elemental Impurities Scrutiny
     if not any(k in content for k in ["elemental", "ich q3d", "icp-ms"]):
         objections.append({
             "code": "QUAL-Q3D-03",
@@ -148,7 +149,7 @@ def run_regulatory_audit(text, filing_type):
     score = max(score, 10)
     return score, objections, defenses, pubmed_queries
 
-# --- PDF Export Class (Proper Margin Fit) ---
+# --- PDF Export Class ---
 class ComplivoxPDF(FPDF):
     def header(self):
         self.set_fill_color(15, 23, 42)
@@ -181,7 +182,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
     pdf.cell(0, 4, f"Tamper-Proof Audit Hash (SHA-256): {file_hash[:28]}...", ln=True)
     pdf.ln(3)
 
-    # Score Box (Clean Margins)
+    # Score Box
     current_y = pdf.get_y()
     pdf.set_fill_color(241, 245, 249)
     pdf.rect(12, current_y, 186, 11, 'F')
@@ -196,7 +197,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
     pdf.cell(90, 7, status_str, align='R')
     pdf.set_xy(12, current_y + 14)
 
-    # Flagged Objections
+    # Objections Section
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(185, 28, 28)
     pdf.cell(0, 5, "FLAGGED STATUTORY GAPS & ANTICIPATED COMMITTEE OBJECTIONS", ln=True)
@@ -213,7 +214,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
         pdf.ln(1)
 
     pdf.ln(2)
-    # Pre-emptive Defenses
+    # Pre-emptive Defenses Section
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(22, 101, 52)
     pdf.cell(0, 5, "PRE-EMPTIVE STATUTORY DEFENSE STRATEGY (RTQ PROTOCOL)", ln=True)
@@ -226,7 +227,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
         pdf.multi_cell(186, 3.8, f"{idx}. {d}")
         pdf.ln(1)
 
-    # PubMed Citations
+    # PubMed Citations Section
     if citations:
         pdf.ln(2)
         pdf.set_font("Helvetica", 'B', 9)
@@ -273,14 +274,29 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 3-Step Interactive Bar
+# 3-Step Interactive Bar (High-Contrast Text)
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown("""<div class="guide-step"><strong>Step 1: Choose Pathway</strong><br><span style="font-size:0.82em; color:#64748b;">Select Regulatory Body in Sidebar</span></div>""", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="guide-step">
+        <strong style="color: #0f172a; font-size: 0.95em;">Step 1: Choose Pathway</strong><br>
+        <span style="font-size: 0.85em; color: #1e293b; font-weight: 600;">Select Body in Sidebar</span>
+    </div>
+    """, unsafe_allow_html=True)
 with c2:
-    st.markdown("""<div class="guide-step"><strong>Step 2: Provide Context</strong><br><span style="font-size:0.82em; color:#64748b;">Use Sample or Drop Dossier PDF</span></div>""", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="guide-step">
+        <strong style="color: #0f172a; font-size: 0.95em;">Step 2: Provide Context</strong><br>
+        <span style="font-size: 0.85em; color: #1e293b; font-weight: 600;">Use Sample or Drop PDF</span>
+    </div>
+    """, unsafe_allow_html=True)
 with c3:
-    st.markdown("""<div class="guide-step"><strong>Step 3: Run & Download</strong><br><span style="font-size:0.82em; color:#64748b;">Get Objections, PubMed Citations & PDF</span></div>""", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="guide-step">
+        <strong style="color: #0f172a; font-size: 0.95em;">Step 3: Run & Download</strong><br>
+        <span style="font-size: 0.85em; color: #1e293b; font-weight: 600;">Get Objections & PDF</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.write("")
 
@@ -318,7 +334,6 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
         file_hash = hashlib.sha256(active_text.encode()).hexdigest()
         score, objections, defenses, pubmed_queries = run_regulatory_audit(active_text, filing_type)
         
-        # Pull Live Citations
         citations = []
         for q in pubmed_queries[:2]:
             citations.extend(fetch_pubmed_citations(q, max_results=1))
@@ -332,7 +347,7 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
 
         st.divider()
 
-        # Detailed View
+        # Detailed Scrutiny View
         left_col, right_col = st.columns([1.1, 0.9])
 
         with left_col:
