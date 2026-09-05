@@ -5,7 +5,7 @@ from datetime import datetime
 from fpdf import FPDF
 from pypdf import PdfReader
 
-# --- Page Setup (Collapsed Sidebar for Mobile Optimization) ---
+# --- Page Setup ---
 st.set_page_config(
     page_title="Complivox Global | Regulatory Intelligence Engine",
     page_icon="🛡️",
@@ -57,6 +57,52 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- Dynamic Pathway Mapping ---
+pathway_catalog = {
+    "India (CDSCO)": [
+        "Form 40 (Drug Substance / Import Registration)",
+        "MD-14 (Medical Device Import License)",
+        "CT-06 (Clinical Trial Protocol Permission)",
+        "Form 41 (Finished Formulation Import Registration)"
+    ],
+    "United States (US FDA)": [
+        "DMF Type II (Drug Substance / Active Ingredient)",
+        "ANDA Technical Dossier (Generics - 21 CFR 314)",
+        "510(k) Premarket Notification (Medical Device)",
+        "IND Safety & Protocol Defense (21 CFR 312)"
+    ],
+    "Europe (EMA)": [
+        "ASMF (Active Substance Master File - CPMP/QWP)",
+        "EU MDR 2017/745 Annex II (Medical Device Technical Dossier)",
+        "CTA Clinical Trial Regulation (EU) 536/2014",
+        "CEP Dossier (EDQM Ph. Eur. Compliance)"
+    ],
+    "Dual Filing (CDSCO + FDA)": [
+        "Combined Form 40 + DMF Type II Scrutiny",
+        "Combined MD-14 + 510(k) Dual Medical Device Scrutiny"
+    ]
+}
+
+# --- Sidebar Controls ---
+st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
+st.sidebar.title("Complivox Global")
+st.sidebar.caption("Enterprise Regulatory Intelligence (v1.0)")
+
+jurisdiction = st.sidebar.selectbox(
+    "Target Regulatory Body",
+    list(pathway_catalog.keys())
+)
+
+# Dynamic Filing Pathway based on selected jurisdiction
+filing_type = st.sidebar.selectbox(
+    "Filing Pathway",
+    pathway_catalog[jurisdiction]
+)
+
+st.sidebar.divider()
+st.sidebar.markdown("**🔒 Zero-Data Retention Active**")
+st.sidebar.caption("Audit documents are analyzed strictly in volatile memory and wiped upon session close. Compliant with Pharma Enterprise IP confidentiality.")
+
 # --- Live PubMed Literature Fetcher ---
 @st.cache_data(show_spinner=False, ttl=3600)
 def fetch_pubmed_citations(query_term, max_results=2):
@@ -95,47 +141,49 @@ def fetch_pubmed_citations(query_term, max_results=2):
     return citations
 
 # --- Statutory Scrutiny Engine ---
-def run_regulatory_audit(text, filing_type):
+def run_regulatory_audit(text, jurisdiction, filing_type):
     content = text.lower()
     objections = []
     defenses = []
     pubmed_queries = []
     score = 100
 
-    # Zone IVb Stability Scrutiny
-    if not any(k in content for k in ["zone ivb", "30°c/75% rh", "30c/75%rh", "30 deg"]):
-        objections.append({
-            "code": "CDSCO-STAB-01",
-            "rule": "CDSCO G.S.R. 1337(E) / Stability Requirements for Indian Climate",
-            "issue": "Missing Zone IVb (30°C ± 2°C / 75% RH ± 5% RH) Real-Time Stability Submission. Filing relies exclusively on standard 25°C/60% RH."
-        })
-        defenses.append("Submit 6-month accelerated data backed by an immediate Zone IVb 12-month real-time testing commitment protocol.")
-        score -= 25
+    # Zone IVb Check for CDSCO or Dual
+    if "CDSCO" in jurisdiction or "Dual" in jurisdiction or "India" in jurisdiction:
+        if not any(k in content for k in ["zone ivb", "30°c/75% rh", "30c/75%rh", "30 deg"]):
+            objections.append({
+                "code": "CDSCO-STAB-01",
+                "rule": "CDSCO G.S.R. 1337(E) / Stability Requirements for Indian Climate",
+                "issue": "Missing Zone IVb (30°C ± 2°C / 75% RH ± 5% RH) Real-Time Stability Submission. Filing relies exclusively on standard 25°C/60% RH."
+            })
+            defenses.append("Submit 6-month accelerated data backed by an immediate Zone IVb 12-month real-time testing commitment protocol.")
+            score -= 25
 
-    # Nitrosamines / ICH M7 Scrutiny
+    # Nitrosamines / ICH M7 Check
     if not any(k in content for k in ["nitrosamine", "ich m7", "purge", "ndma"]):
+        rule_name = "FDA Guidance on Nitrosamines / ICH M7" if "FDA" in jurisdiction else "EMA/CHMP/428592/2019 / ICH M7 Nitrosamine Assessment"
         objections.append({
-            "code": "USFDA-TOX-04",
-            "rule": "FDA Guidance on Nitrosamines / ICH M7 (Mutagenic Impurities)",
+            "code": "TOX-M7-04",
+            "rule": rule_name,
             "issue": "Absence of Nitrosamine Drug-Substance purge evaluation and acceptable intake limit calculation."
         })
         defenses.append("Provide Option 4 purge justification establishing theoretical maximum nitrosamine contamination is well below 18 ng/day threshold.")
         pubmed_queries.append("nitrosamine impurity risk assessment pharmaceuticals")
         score -= 30
 
-    # Device Biocompatibility Scrutiny
-    if "MD-14" in filing_type:
+    # Device Biocompatibility Check
+    if any(k in filing_type for k in ["MD-14", "510(k)", "MDR 2017/745"]):
         if not any(k in content for k in ["iso 10993", "cytotoxicity", "biocompatibility"]):
             objections.append({
-                "code": "MDR-DEV-02",
-                "rule": "Medical Device Rules (MDR) 2017 / ISO 10993-1",
+                "code": "DEV-BIO-02",
+                "rule": "ISO 10993-1 / Medical Device Biocompatibility Matrix",
                 "issue": "Biological evaluation endpoints (extractable/leachable, cytotoxicity, pyrogenicity) not documented."
             })
             defenses.append("Furnish accredited ISO 17025 laboratory biological risk assessment report per ISO 10993-1:2018.")
             pubmed_queries.append("ISO 10993 biocompatibility medical devices")
             score -= 20
 
-    # Elemental Impurities Scrutiny
+    # Elemental Impurities
     if not any(k in content for k in ["elemental", "ich q3d", "icp-ms"]):
         objections.append({
             "code": "QUAL-Q3D-03",
@@ -245,36 +293,17 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
 
     return bytes(pdf.output())
 
-# --- Sidebar Controls ---
-st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
-st.sidebar.title("Complivox Global")
-st.sidebar.caption("Enterprise Regulatory Intelligence (v1.0)")
-
-jurisdiction = st.sidebar.selectbox(
-    "Target Regulatory Body",
-    ["India (CDSCO)", "United States (US FDA)", "Europe (EMA)", "Dual Filing (CDSCO + FDA)"]
-)
-
-filing_type = st.sidebar.selectbox(
-    "Filing Pathway",
-    ["Form 40 (Drug Substance / Import)", "MD-14 (Medical Device Import)", "DMF Type II (Active Ingredient)", "CT-06 (Clinical Protocol)"]
-)
-
-st.sidebar.divider()
-st.sidebar.markdown("**🔒 Zero-Data Retention Active**")
-st.sidebar.caption("Audit documents are analyzed strictly in volatile memory and wiped upon session close. Compliant with Pharma Enterprise IP confidentiality.")
-
 # --- Header & Visual 3-Step Guide ---
 st.markdown("""
 <div class="hero-box">
     <h2 style="margin:0; font-size: 1.7rem;">Automate Pre-Submission SEC & Regulatory Defense</h2>
     <p style="margin:6px 0 0 0; color: #cbd5e1; font-size: 0.95rem;">
-        Prevent months of dossier approval delays by auditing DMF technical excerpts, COAs, and stability protocols against CDSCO & US FDA committee objection rules.
+        Prevent months of dossier approval delays by auditing DMF technical excerpts, COAs, and stability protocols against CDSCO, US FDA & EMA statutory objection rules.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# 3-Step Interactive Bar (High-Contrast Text)
+# 3-Step Interactive Bar
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("""
@@ -332,7 +361,7 @@ st.write("")
 if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_container_width=True):
     with st.spinner("Analyzing statutory gap matrix and querying NCBI PubMed for toxicological citations..."):
         file_hash = hashlib.sha256(active_text.encode()).hexdigest()
-        score, objections, defenses, pubmed_queries = run_regulatory_audit(active_text, filing_type)
+        score, objections, defenses, pubmed_queries = run_regulatory_audit(active_text, jurisdiction, filing_type)
         
         citations = []
         for q in pubmed_queries[:2]:
@@ -387,10 +416,10 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
             st.download_button(
                 label="Download Official A4 Statutory Dossier (PDF)",
                 data=pdf_data,
-                file_name=f"Complivox_Audit_{filing_type[:7].replace(' ','_')}.pdf",
+                file_name=f"Complivox_Audit_{jurisdiction[:6].replace(' ','_')}.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
 
 st.divider()
-st.caption("Complivox Global Engine | CDSCO Form 40/MD-14 • US FDA 21 CFR • ICH M7/Q3D • ISO 10993 Compliance Frameworks.")
+st.caption("Complivox Global Engine | CDSCO Form 40/MD-14 • US FDA 21 CFR • EMA ASMF • ICH M7/Q3D • ISO 10993.")
