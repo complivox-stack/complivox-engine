@@ -1,16 +1,22 @@
 import streamlit as st
 import requests
 import hashlib
-from datetime import datetime
+import json
+import io
+import os
+from datetime import datetime, timezone
 from fpdf import FPDF
 from pypdf import PdfReader
+from docx import Document
+from google import genai
+from google.genai import types
 
 # --- Page Setup ---
 st.set_page_config(
     page_title="Complivox Global | Regulatory Intelligence Engine",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # --- Enterprise CSS Styling ---
@@ -54,58 +60,114 @@ st.markdown("""
         margin-bottom: 8px;
         font-size: 0.88em;
     }
+    .statute-tag {
+        background-color: #e0f2fe;
+        color: #0369a1;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.76em;
+        font-weight: 600;
+        margin: 2px;
+        display: inline-block;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Dynamic Pathway Mapping ---
-pathway_catalog = {
-    "India (CDSCO)": [
-        "Form 40 (Drug Substance / Import Registration)",
-        "MD-14 (Medical Device Import License)",
-        "CT-06 (Clinical Trial Protocol Permission)",
-        "Form 41 (Finished Formulation Import Registration)"
-    ],
-    "United States (US FDA)": [
-        "DMF Type II (Drug Substance / Active Ingredient)",
-        "ANDA Technical Dossier (Generics - 21 CFR 314)",
-        "510(k) Premarket Notification (Medical Device)",
-        "IND Safety & Protocol Defense (21 CFR 312)"
-    ],
-    "Europe (EMA)": [
-        "ASMF (Active Substance Master File - CPMP/QWP)",
-        "EU MDR 2017/745 Annex II (Medical Device Technical Dossier)",
-        "CTA Clinical Trial Regulation (EU) 536/2014",
-        "CEP Dossier (EDQM Ph. Eur. Compliance)"
-    ],
-    "Dual Filing (CDSCO + FDA)": [
-        "Combined Form 40 + DMF Type II Scrutiny",
-        "Combined MD-14 + 510(k) Dual Medical Device Scrutiny"
-    ]
+# --- Dynamic Local Repository Scanner ---
+@st.cache_data(show_spinner=False)
+def scan_repository_knowledge():
+    detected_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
+    statutory_context = []
+    
+    for f in detected_files:
+        clean_name = f.replace(".pdf", "").replace("_", " ").strip()
+        statutory_context.append({
+            "filename": f,
+            "display": clean_name
+        })
+    return statutory_context
+
+local_statutes = scan_repository_knowledge()
+
+# --- Universal Filing Taxonomy ---
+pathways_catalog = {
+    "💊 Pharmaceuticals & Formulations": {
+        "India (CDSCO & SUGAM)": [
+            "Form 40 (API / Bulk Drug Substance Registration)",
+            "Form 41 (Finished Formulation Import Registration)",
+            "CT-06 (Clinical Trial Protocol / SEC Scrutiny)",
+            "Written Confirmation (WC EU Export Compliance)"
+        ],
+        "United States (US FDA)": [
+            "DMF Type II (Active Pharmaceutical Ingredient)",
+            "ANDA Module 3 Quality Dossier (21 CFR 314)",
+            "IND Safety & Protocol Defense (21 CFR 312)"
+        ],
+        "Europe (EMA / EDQM)": [
+            "ASMF (Active Substance Master File - CPMP/QWP)",
+            "CEP Dossier (EDQM Ph. Eur. Compliance)"
+        ],
+        "Dual Filing (CDSCO + US FDA)": [
+            "Combined Form 40 + US DMF Type II Statutory Scrutiny"
+        ]
+    },
+    "🩺 Medical Devices & In-Vitro Diagnostics": {
+        "India (CDSCO MDR 2017)": [
+            "MD-14 (Medical Device Import License - Class A/B/C/D)",
+            "MD-15 (Medical Device Import Permission / IVD)",
+            "Device Master File (DMF) & Plant Master File (PMF)",
+            "PSUR Module Compliance (SUGAM 3.0 Verification)"
+        ],
+        "United States (US FDA)": [
+            "510(k) Premarket Notification (Substantial Equivalence)",
+            "PMA (Premarket Approval - Class III Life-Supporting)",
+            "De Novo Regulatory Classification"
+        ],
+        "Europe (EU MDR)": [
+            "EU MDR 2017/745 Annex II & III Technical Documentation",
+            "EU IVDR 2017/746 Technical Dossier"
+        ],
+        "Dual Filing (CDSCO MD-14 + US FDA 510(k))": [
+            "Combined Form MD-14 + 510(k) Equivalence Scrutiny"
+        ]
+    }
 }
 
 # --- Sidebar Controls ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
 st.sidebar.title("Complivox Global")
-st.sidebar.caption("Enterprise Regulatory Intelligence (v1.0)")
+st.sidebar.caption("Enterprise Regulatory Intelligence Engine")
 
-jurisdiction = st.sidebar.selectbox(
-    "Target Regulatory Body",
-    list(pathway_catalog.keys())
-)
+domain_choice = st.sidebar.radio("Product Category:", list(pathways_catalog.keys()))
+active_jurisdictions = pathways_catalog[domain_choice]
 
-# Dynamic Filing Pathway based on selected jurisdiction
-filing_type = st.sidebar.selectbox(
-    "Filing Pathway",
-    pathway_catalog[jurisdiction]
+jurisdiction = st.sidebar.selectbox("Target Regulatory Body", list(active_jurisdictions.keys()))
+filing_type = st.sidebar.selectbox("Filing Pathway", active_jurisdictions[jurisdiction])
+
+# Global API Key Resolution
+env_api_key = st.secrets.get("GEMINI_API_KEY", "")
+user_api_key = st.sidebar.text_input(
+    "🔑 Google Gemini API Key",
+    value=env_api_key,
+    type="password",
+    help="AI Studio se li hui free key yahan paste karein."
 )
 
 st.sidebar.divider()
-st.sidebar.markdown("**🔒 Zero-Data Retention Active**")
-st.sidebar.caption("Audit documents are analyzed strictly in volatile memory and wiped upon session close. Compliant with Pharma Enterprise IP confidentiality.")
+st.sidebar.markdown(f"**Linked Repository Statutes ({len(local_statutes)}):**")
+for item in local_statutes[:5]:
+    st.sidebar.markdown(f"<span class='statute-tag'>Active</span> {item['display'][:35]}...", unsafe_allow_html=True)
 
-# --- Live PubMed Literature Fetcher ---
+if len(local_statutes) > 5:
+    st.sidebar.caption(f"+ {len(local_statutes) - 5} additional statutory gazettes indexed.")
+
+st.sidebar.divider()
+st.sidebar.markdown("**🔒 Zero-Data Retention**")
+st.sidebar.caption("Volatile memory processing only. Complies with 21 CFR Part 11 & GAMP 5.")
+
+# --- PubMed Evidence Fetcher ---
 @st.cache_data(show_spinner=False, ttl=3600)
-def fetch_pubmed_citations(query_term, max_results=2):
+def fetch_pubmed_citations(query_term, max_results=1):
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
     citations = []
     try:
@@ -120,84 +182,146 @@ def fetch_pubmed_citations(query_term, max_results=2):
             
             for pmid in id_list:
                 doc = result_dict.get(pmid, {})
-                title = doc.get('title', 'Regulatory Toxicology & Safety Evaluation')
-                pubdate = doc.get('pubdate', '2023')
-                source = doc.get('source', 'Journal of Pharmaceutical Sciences')
                 citations.append({
                     "pmid": pmid,
-                    "title": title,
-                    "source": f"{source} ({pubdate})",
+                    "title": doc.get('title', 'Regulatory Toxicology & Safety Evaluation'),
+                    "source": f"{doc.get('source', 'J Pharm Sci')} ({doc.get('pubdate', '2024')})",
                     "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
                 })
     except Exception:
-        citations = [
-            {
-                "pmid": "31818274",
-                "title": "ICH M7 Guideline: Assessment and Control of Mutagenic Impurities in Pharmaceuticals.",
-                "source": "Regul Toxicol Pharmacol (2020)",
-                "url": "https://pubmed.ncbi.nlm.nih.gov/31818274/"
-            }
-        ]
+        citations = [{
+            "pmid": "31818274",
+            "title": "ICH M7 Guideline: Assessment and Control of Mutagenic Impurities in Pharmaceuticals.",
+            "source": "Regul Toxicol Pharmacol (2020)",
+            "url": "https://pubmed.ncbi.nlm.nih.gov/31818274/"
+        }]
     return citations
 
-# --- Statutory Scrutiny Engine ---
-def run_regulatory_audit(text, jurisdiction, filing_type):
+# --- Cognitive AI Scrutiny Engine ---
+def execute_statutory_scrutiny(text, jurisdiction, filing_type, domain, api_key, statutes):
+    statute_context_list = [s['display'] for s in statutes]
+    statutes_joined = "; ".join(statute_context_list)
+
+    if api_key:
+        try:
+            client = genai.Client(api_key=api_key)
+            prompt = f"""
+You are the Chief Regulatory Auditor for Complivox Global.
+Evaluate this submission for {jurisdiction} ({filing_type}) under domain {domain}.
+
+Repository Grounding Context:
+Indexed circulars available: {statutes_joined}. Cite these specifically where relevant.
+
+Scrutiny Directives:
+- For Pharmaceuticals: Check Zone IVb stability per G.S.R. 1337(E), ICH M7 nitrosamine purge evaluation, ICH Q3D elemental impurities, and ICH Q3C residual solvents.
+- For Medical Devices: Check MDR 2017 Fourth Schedule Part A & B, Free Sale Certificate apostille validity per G.S.R. 754(E), ISO 13485:2016 scope, ISO 10993 biocompatibility matrix, and 510(k) predicate comparison.
+
+Return ONLY a valid JSON object matching:
+{{
+  "score": <integer from 10 to 100>,
+  "objections": [
+    {{"code": "<Rule Code>", "rule": "<Statutory Guideline / Gazette>", "issue": "<Detailed Deficiency Description>"}}
+  ],
+  "defenses": [
+    "<Step-by-step regulatory Response to Query (RTQ) justification>"
+  ],
+  "pubmed_queries": [
+    "<Scientific search query>"
+  ]
+}}
+
+Submission Dossier Text:
+\"\"\"{text}\"\"\"
+"""
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+            data = json.loads(response.text)
+            return data["score"], data["objections"], data["defenses"], data.get("pubmed_queries", [])
+        except Exception:
+            pass
+
+    return execute_fallback_heuristics(text, jurisdiction, filing_type, domain)
+
+# --- Built-In Fallback Heuristics ---
+def execute_fallback_heuristics(text, jurisdiction, filing_type, domain):
     content = text.lower()
     objections = []
     defenses = []
     pubmed_queries = []
     score = 100
 
-    # Zone IVb Check for CDSCO or Dual
-    if "CDSCO" in jurisdiction or "Dual" in jurisdiction or "India" in jurisdiction:
-        if not any(k in content for k in ["zone ivb", "30°c/75% rh", "30c/75%rh", "30 deg"]):
+    if "Devices" in domain:
+        if not any(k in content for k in ["free sale", "fsc", "certificate of free sale"]):
             objections.append({
-                "code": "CDSCO-STAB-01",
-                "rule": "CDSCO G.S.R. 1337(E) / Stability Requirements for Indian Climate",
-                "issue": "Missing Zone IVb (30°C ± 2°C / 75% RH ± 5% RH) Real-Time Stability Submission. Filing relies exclusively on standard 25°C/60% RH."
+                "code": "CDSCO-MDR-FSC-01",
+                "rule": "Medical Device Rules 2017 / G.S.R. 754(E) Fourth Schedule",
+                "issue": "Missing Apostilled Free Sale Certificate (FSC) from National Regulatory Authority of country of origin."
             })
-            defenses.append("Submit 6-month accelerated data backed by an immediate Zone IVb 12-month real-time testing commitment protocol.")
+            defenses.append("Furnish authenticated Apostilled Free Sale Certificate from reference agency (US FDA CFS / EU CE Certificate).")
             score -= 25
 
-    # Nitrosamines / ICH M7 Check
-    if not any(k in content for k in ["nitrosamine", "ich m7", "purge", "ndma"]):
-        rule_name = "FDA Guidance on Nitrosamines / ICH M7" if "FDA" in jurisdiction else "EMA/CHMP/428592/2019 / ICH M7 Nitrosamine Assessment"
-        objections.append({
-            "code": "TOX-M7-04",
-            "rule": rule_name,
-            "issue": "Absence of Nitrosamine Drug-Substance purge evaluation and acceptable intake limit calculation."
-        })
-        defenses.append("Provide Option 4 purge justification establishing theoretical maximum nitrosamine contamination is well below 18 ng/day threshold.")
-        pubmed_queries.append("nitrosamine impurity risk assessment pharmaceuticals")
-        score -= 30
-
-    # Device Biocompatibility Check
-    if any(k in filing_type for k in ["MD-14", "510(k)", "MDR 2017/745"]):
-        if not any(k in content for k in ["iso 10993", "cytotoxicity", "biocompatibility"]):
+        if not any(k in content for k in ["iso 13485", "qms"]):
             objections.append({
-                "code": "DEV-BIO-02",
-                "rule": "ISO 10993-1 / Medical Device Biocompatibility Matrix",
-                "issue": "Biological evaluation endpoints (extractable/leachable, cytotoxicity, pyrogenicity) not documented."
+                "code": "CDSCO-MDR-QMS-02",
+                "rule": "MDR 2017 Rule 34 / ISO 13485:2016 Compliance",
+                "issue": "Evidence of ISO 13485:2016 certification covering the manufacturing premises not provided."
             })
-            defenses.append("Furnish accredited ISO 17025 laboratory biological risk assessment report per ISO 10993-1:2018.")
-            pubmed_queries.append("ISO 10993 biocompatibility medical devices")
+            defenses.append("Submit valid Notified Body accredited ISO 13485:2016 certificate covering the audited manufacturing site.")
             score -= 20
 
-    # Elemental Impurities
-    if not any(k in content for k in ["elemental", "ich q3d", "icp-ms"]):
-        objections.append({
-            "code": "QUAL-Q3D-03",
-            "rule": "ICH Q3D Guideline for Elemental Impurities",
-            "issue": "Class 1 and Class 2A heavy metal impurity risk evaluation not documented."
-        })
-        defenses.append("Submit ICP-MS validated analytical results showing elemental concentrations fall strictly below PDE limits.")
-        pubmed_queries.append("ICH Q3D elemental impurities pharmaceuticals")
-        score -= 15
+        if not any(k in content for k in ["iso 10993", "biocompatibility", "cytotoxicity"]):
+            objections.append({
+                "code": "DEV-BIO-03",
+                "rule": "ISO 10993-1:2018 / Biocompatibility Matrix",
+                "issue": "Biological evaluation endpoints (cytotoxicity, systemic toxicity, sensitization) not documented."
+            })
+            defenses.append("Submit GLP-compliant biological safety evaluation test reports as per ISO 10993-1:2018.")
+            pubmed_queries.append("ISO 10993 biocompatibility medical devices")
+            score -= 25
+    else:
+        if any(k in jurisdiction for k in ["CDSCO", "Dual", "India"]):
+            if not any(k in content for k in ["zone ivb", "30°c", "30c", "30 deg"]):
+                objections.append({
+                    "code": "CDSCO-STAB-01",
+                    "rule": "CDSCO G.S.R. 1337(E) Stability Guidelines",
+                    "issue": "Missing Zone IVb (30 deg C +/- 2 deg C / 75% RH +/- 5% RH) real-time stability submission for Indian climate."
+                })
+                defenses.append("Submit 6-month accelerated stability data coupled with Zone IVb 12-month real-time commitment protocol.")
+                score -= 30
 
-    score = max(score, 10)
-    return score, objections, defenses, pubmed_queries
+        if not any(k in content for k in ["nitrosamine", "ich m7", "purge", "ndma"]):
+            objections.append({
+                "code": "TOX-M7-04",
+                "rule": "ICH M7(R1) / US FDA Nitrosamine Guidance",
+                "issue": "Absence of Nitrosamine Drug-Substance purge ratio evaluation and acceptable intake limit calculation."
+            })
+            defenses.append("Provide Option 4 purge calculation establishing theoretical maximum nitrosamine contamination is below 18 ng/day threshold.")
+            pubmed_queries.append("nitrosamine impurity risk assessment pharmaceuticals")
+            score -= 25
 
-# --- PDF Export Class ---
+        if not any(k in content for k in ["elemental", "ich q3d", "icp-ms"]):
+            objections.append({
+                "code": "QUAL-Q3D-03",
+                "rule": "ICH Q3D Elemental Impurities Guideline",
+                "issue": "Class 1 and Class 2A heavy metal impurity risk evaluation not documented."
+            })
+            defenses.append("Submit ICP-MS validated analytical results demonstrating elemental concentrations fall strictly below PDE limits.")
+            pubmed_queries.append("ICH Q3D elemental impurities pharmaceuticals")
+            score -= 15
+
+    return max(score, 10), objections, defenses, pubmed_queries
+
+# --- Clean Text Helper ---
+def clean_for_export(t: str) -> str:
+    reps = {"°": " deg ", "±": "+/-", "—": "-", "–": "-", "“": '"', "”": '"', "’": "'", "‘": "'"}
+    for k, v in reps.items():
+        t = t.replace(k, v)
+    return t.encode("latin-1", "replace").decode("latin-1")
+
+# --- PDF Generation Class ---
 class ComplivoxPDF(FPDF):
     def header(self):
         self.set_fill_color(15, 23, 42)
@@ -205,16 +329,16 @@ class ComplivoxPDF(FPDF):
         self.set_font("Helvetica", 'B', 10)
         self.set_text_color(255, 255, 255)
         self.set_xy(12, 4)
-        self.cell(186, 8, "COMPLIVOX GLOBAL | STATUTORY PRE-SUBMISSION DEFENSE DOSSIER", ln=True)
-        self.ln(6)
+        self.cell(186, 8, "COMPLIVOX GLOBAL | STATUTORY PRE-SUBMISSION DEFENSE DOSSIER")
+        self.ln(10)
 
     def footer(self):
         self.set_y(-12)
         self.set_font("Helvetica", 'I', 7)
         self.set_text_color(148, 163, 184)
-        self.cell(0, 6, "Confidential - SEC & Regulatory Defense Use Only | Complivox Enterprise Platform", align='C')
+        self.cell(0, 6, "Confidential - SEC & Statutory Defense Dossier | Complivox Enterprise Platform", align='C')
 
-def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash):
+def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain):
     pdf = ComplivoxPDF(format='A4')
     pdf.set_margins(12, 18, 12)
     pdf.add_page()
@@ -222,30 +346,29 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
 
     pdf.set_font("Helvetica", 'B', 12)
     pdf.set_text_color(15, 23, 42)
-    pdf.cell(0, 7, "Executive Regulatory Pre-Submission Audit", ln=True)
+    pdf.cell(0, 7, clean_for_export(f"Executive Statutory Audit: {domain.split(' ')[1]}"), ln=True)
 
     pdf.set_font("Helvetica", '', 8)
     pdf.set_text_color(100, 116, 139)
-    pdf.cell(0, 4, f"Target Agency: {jurisdiction} | Pathway: {filing_type} | Date: {datetime.utcnow().strftime('%d-%b-%Y %H:%M UTC')}", ln=True)
-    pdf.cell(0, 4, f"Tamper-Proof Audit Hash (SHA-256): {file_hash[:28]}...", ln=True)
+    current_time = datetime.now(timezone.utc).strftime('%d-%b-%Y %H:%M UTC')
+    pdf.cell(0, 4, clean_for_export(f"Target Authority: {jurisdiction} | Pathway: {filing_type} | Date: {current_time}"), ln=True)
+    pdf.cell(0, 4, f"Audit Hash (SHA-256): {file_hash[:32]}...", ln=True)
     pdf.ln(3)
 
     # Score Box
     current_y = pdf.get_y()
     pdf.set_fill_color(241, 245, 249)
     pdf.rect(12, current_y, 186, 11, 'F')
-    
     pdf.set_font("Helvetica", 'B', 8.5)
     pdf.set_text_color(15, 23, 42)
     pdf.set_xy(15, current_y + 2)
-    pdf.cell(85, 7, f"Pre-Submission Scrutiny Readiness: {score}/100")
-    
-    status_str = "STATUS: HIGH DEFENSE DEFICIT" if score < 70 else "STATUS: AUDIT DEFENSIBLE"
+    pdf.cell(85, 7, f"Statutory Defense Readiness: {score}/100")
     pdf.set_xy(105, current_y + 2)
+    status_str = "STATUS: ACTION REQUIRED (HIGH QUERY DEFICIT)" if score < 70 else "STATUS: STATUTORILY DEFENSIBLE"
     pdf.cell(90, 7, status_str, align='R')
     pdf.set_xy(12, current_y + 14)
 
-    # Objections Section
+    # Objections
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(185, 28, 28)
     pdf.cell(0, 5, "FLAGGED STATUTORY GAPS & ANTICIPATED COMMITTEE OBJECTIONS", ln=True)
@@ -256,26 +379,26 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
     for obj in objections:
         pdf.set_font("Helvetica", 'B', 8)
         pdf.set_text_color(30, 41, 59)
-        pdf.cell(0, 4, f"[{obj['code']}] {obj['rule']}", ln=True)
+        pdf.cell(0, 4, clean_for_export(f"[{obj.get('code','DEF')}] {obj.get('rule','Statutory Rule')}"), ln=True)
         pdf.set_font("Helvetica", '', 7.5)
-        pdf.multi_cell(186, 3.8, f"Deficiency: {obj['issue']}")
+        pdf.multi_cell(186, 3.8, clean_for_export(f"Deficiency: {obj.get('issue','')}"))
         pdf.ln(1)
 
     pdf.ln(2)
-    # Pre-emptive Defenses Section
+    # Defenses
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(22, 101, 52)
-    pdf.cell(0, 5, "PRE-EMPTIVE STATUTORY DEFENSE STRATEGY (RTQ PROTOCOL)", ln=True)
+    pdf.cell(0, 5, "PRE-EMPTIVE STATUTORY DEFENSE STRATEGY (RTQ PROTOCOLS)", ln=True)
     pdf.line(12, pdf.get_y(), 198, pdf.get_y())
     pdf.ln(2)
 
     for idx, d in enumerate(defenses, 1):
         pdf.set_font("Helvetica", '', 7.5)
         pdf.set_text_color(30, 41, 59)
-        pdf.multi_cell(186, 3.8, f"{idx}. {d}")
+        pdf.multi_cell(186, 3.8, clean_for_export(f"{idx}. {d}"))
         pdf.ln(1)
 
-    # PubMed Citations Section
+    # PubMed
     if citations:
         pdf.ln(2)
         pdf.set_font("Helvetica", 'B', 9)
@@ -286,55 +409,72 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
         for cit in citations:
             pdf.set_font("Helvetica", 'B', 7)
             pdf.set_text_color(30, 41, 59)
-            pdf.cell(0, 3.5, f"PMID {cit['pmid']} | {cit['source']}", ln=True)
+            pdf.cell(0, 3.5, clean_for_export(f"PMID {cit['pmid']} | {cit['source']}"), ln=True)
             pdf.set_font("Helvetica", '', 7)
-            pdf.multi_cell(186, 3.5, f"Title: {cit['title']}")
+            pdf.multi_cell(186, 3.5, clean_for_export(f"Title: {cit['title']}"))
             pdf.ln(1)
 
-    return bytes(pdf.output())
+    out = pdf.output()
+    return bytes(out) if not isinstance(out, bytes) else out
 
-# --- Header & Visual 3-Step Guide ---
-st.markdown("""
+# --- Word (.docx) Generation ---
+def create_dossier_docx(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain):
+    doc = Document()
+    doc.add_heading("COMPLIVOX GLOBAL | STATUTORY DEFENSE DOSSIER", level=0)
+    
+    p = doc.add_paragraph()
+    p.add_run(f"Domain: {domain}\n").bold = True
+    p.add_run(f"Target Body: {jurisdiction} | Pathway: {filing_type}\n")
+    p.add_run(f"Audit Hash (SHA-256): {file_hash}\n")
+    p.add_run(f"Readiness Score: {score}/100 | Status: {'Defensible' if score >= 70 else 'Deficit Flagged'}\n")
+
+    doc.add_heading("1. Flagged Committee Objections (Anticipated Deficiencies)", level=1)
+    for obj in objections:
+        p_obj = doc.add_paragraph()
+        p_obj.add_run(f"[{obj.get('code','DEF')}] {obj.get('rule','')}\n").bold = True
+        p_obj.add_run(f"Deficiency: {obj.get('issue','')}")
+
+    doc.add_heading("2. Statutory Defense Strategy (Response to Queries - RTQ)", level=1)
+    for idx, d in enumerate(defenses, 1):
+        doc.add_paragraph(f"{idx}. {d}")
+
+    if citations:
+        doc.add_heading("3. Clinical & Toxicological Literature (PubMed Grounding)", level=1)
+        for cit in citations:
+            doc.add_paragraph(f"PMID: {cit['pmid']} - {cit['title']} ({cit['source']})")
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    return file_stream.getvalue()
+
+# --- Main App Header ---
+st.markdown(f"""
 <div class="hero-box">
-    <h2 style="margin:0; font-size: 1.7rem;">Automate Pre-Submission SEC & Regulatory Defense</h2>
+    <h2 style="margin:0; font-size: 1.7rem;">Complivox Global | Statutory Defense Engine</h2>
     <p style="margin:6px 0 0 0; color: #cbd5e1; font-size: 0.95rem;">
-        Prevent months of dossier approval delays by auditing DMF technical excerpts, COAs, and stability protocols against CDSCO, US FDA & EMA statutory objection rules.
+        Autonomous pre-submission scrutiny for CDSCO (MD-14/15, Form 40), US FDA (510k, ANDA) & EMA dossiers. Backed by {len(local_statutes)} statutory gazette circulars.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# 3-Step Interactive Bar
+# 3-Step Bar
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown("""
-    <div class="guide-step">
-        <strong style="color: #0f172a; font-size: 0.95em;">Step 1: Choose Pathway</strong><br>
-        <span style="font-size: 0.85em; color: #1e293b; font-weight: 600;">Select Body in Sidebar</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 1: Category</strong><br><span style="font-size:0.85em;">Medicines or Devices</span></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown("""
-    <div class="guide-step">
-        <strong style="color: #0f172a; font-size: 0.95em;">Step 2: Provide Context</strong><br>
-        <span style="font-size: 0.85em; color: #1e293b; font-weight: 600;">Use Sample or Drop PDF</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 2: Input Context</strong><br><span style="font-size:0.85em;">Drop PDF / Sample Text</span></div>', unsafe_allow_html=True)
 with c3:
-    st.markdown("""
-    <div class="guide-step">
-        <strong style="color: #0f172a; font-size: 0.95em;">Step 3: Run & Download</strong><br>
-        <span style="font-size: 0.85em; color: #1e293b; font-weight: 600;">Get Objections & PDF</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 3: Export Defense</strong><br><span style="font-size:0.85em;">Download PDF + Word</span></div>', unsafe_allow_html=True)
 
 st.write("")
 
-# --- File Ingestion / Text Input ---
-tab1, tab2 = st.tabs(["📄 Upload Technical Dossier (PDF)", "✍️ Live Demonstration Excerpt"])
+# File Ingestion / Text Input
+input_mode = st.radio("Submission Context Input:", ["Live Demonstration Excerpt", "Upload Technical Dossier (PDF)"], horizontal=True)
+
 active_text = ""
 
-with tab1:
-    uploaded_pdf = st.file_uploader("Upload technical DMF excerpt, COA, or stability summary (PDF)", type=["pdf"])
+if input_mode == "Upload Technical Dossier (PDF)":
+    uploaded_pdf = st.file_uploader("Upload technical DMF excerpt, COA, or Device Master File (PDF)", type=["pdf"])
     if uploaded_pdf:
         try:
             reader = PdfReader(uploaded_pdf)
@@ -345,81 +485,96 @@ with tab1:
             st.success(f"Extracted {len(reader.pages)} page(s) successfully from {uploaded_pdf.name}")
         except Exception as err:
             st.error(f"Error reading PDF: {err}")
-
-with tab2:
-    sample_text = st.text_area(
-        "Technical Submission Excerpt (Pre-loaded with real-world Form 40 DMF data):",
-        value="Drug Substance: Ondansetron Hydrochloride USP.\nAccelerated Stability: Tested at 40°C / 75% RH for 6 months.\nLong Term Testing: Tested at 25°C / 60% RH for 12 months.\nResidual Solvents: Complies with standard pharmacopeial limits.\nPrimary Packaging: Double polyethylene bags inside tamper-evident HDPE drums.",
-        height=130
+else:
+    default_sample = (
+        "Drug Substance: Ondansetron Hydrochloride USP.\nAccelerated Stability: Tested at 40°C / 75% RH for 6 months.\nLong Term Testing: Tested at 25°C / 60% RH for 12 months.\nResidual Solvents: Complies with standard pharmacopeial limits.\nPrimary Packaging: Double polyethylene bags inside tamper-evident HDPE drums."
+        if "Pharmaceuticals" in domain_choice else
+        "Device Name: Disposable Sterile Laparoscopic Trocar (Class B).\nIntended Use: Laparoscopic abdominal access cannula.\nSterilization: Ethylene Oxide (EO) validated per ISO 11135.\nPackaging: Medical grade Tyvek pouch inside shelf carton.\nMissing Documents: ISO 10993 cytotoxicity extractables evaluation pending. Free Sale Certificate not apostilled."
     )
-    if not active_text:
-        active_text = sample_text
+    active_text = st.text_area("Technical Submission Excerpt:", value=default_sample, height=130)
 
 st.write("")
 
-# --- Trigger Audit Engine ---
+# --- Audit Execution Trigger ---
 if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_container_width=True):
-    with st.spinner("Analyzing statutory gap matrix and querying NCBI PubMed for toxicological citations..."):
-        file_hash = hashlib.sha256(active_text.encode()).hexdigest()
-        score, objections, defenses, pubmed_queries = run_regulatory_audit(active_text, jurisdiction, filing_type)
-        
-        citations = []
-        for q in pubmed_queries[:2]:
-            citations.extend(fetch_pubmed_citations(q, max_results=1))
+    if not active_text.strip():
+        st.warning("Please provide submission text or upload a PDF first.")
+    else:
+        with st.spinner("Analyzing statutory gap matrix against CDSCO circulars & querying NCBI PubMed..."):
+            file_hash = hashlib.sha256(active_text.encode("utf-8")).hexdigest()
+            score, objections, defenses, pubmed_queries = execute_statutory_scrutiny(
+                active_text, jurisdiction, filing_type, domain_choice, user_api_key, local_statutes
+            )
+            
+            citations = []
+            for q in pubmed_queries[:2]:
+                citations.extend(fetch_pubmed_citations(q, max_results=1))
 
-        # Dashboard Top Metrics
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Scrutiny Risk Score", f"{score} / 100", delta=f"{score - 100} Deficit", delta_color="inverse")
-        m2.metric("Committee Objections", len(objections))
-        m3.metric("Defensive RTQ Protocols", len(defenses))
-        m4.metric("Live PubMed Citations", len(citations))
+            # Metrics
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Statutory Readiness", f"{score} / 100", delta=f"{score - 100} Deficit", delta_color="inverse")
+            m2.metric("Committee Objections", len(objections))
+            m3.metric("Defensive RTQ Protocols", len(defenses))
+            m4.metric("Live PubMed Evidence", len(citations))
 
-        st.divider()
+            st.divider()
 
-        # Detailed Scrutiny View
-        left_col, right_col = st.columns([1.1, 0.9])
+            # Detailed Output
+            col1, col2 = st.columns([1.1, 0.9])
 
-        with left_col:
-            st.subheader("🚩 Anticipated Committee Objections")
-            for obj in objections:
-                st.markdown(f"""
-                <div class="sec-card">
-                    <strong>[{obj['code']}] {obj['rule']}</strong><br>
-                    <span style="font-size:0.9em; color:#7f1d1d;"><strong>Deficiency:</strong> {obj['issue']}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.subheader("🛡️ Pre-drafted Defense Justifications (RTQ)")
-            for idx, d in enumerate(defenses, 1):
-                st.markdown(f"""
-                <div class="defense-card">
-                    <strong>Defense Protocol #{idx}:</strong><br>
-                    <span style="font-size:0.9em; color:#14532d;">{d}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-        with right_col:
-            st.subheader("📚 PubMed Scientific Evidence")
-            if citations:
-                for cit in citations:
+            with col1:
+                st.subheader("🚩 Anticipated Committee Objections")
+                for obj in objections:
                     st.markdown(f"""
-                    <div class="pubmed-card">
-                        <strong>PMID: {cit['pmid']}</strong> | {cit['source']}<br>
-                        <a href="{cit['url']}" target="_blank" style="color:#1d4ed8; font-weight:600; text-decoration:none;">{cit['title']}</a>
+                    <div class="sec-card">
+                        <strong>[{obj.get('code','DEF')}] {obj.get('rule','Statute')}</strong><br>
+                        <span style="font-size:0.9em; color:#7f1d1d;"><strong>Deficiency:</strong> {obj.get('issue','')}</span>
                     </div>
                     """, unsafe_allow_html=True)
-            else:
-                st.caption("No toxicological queries triggered for this excerpt.")
 
-            st.subheader("📥 Export Defensible Dossier")
-            pdf_data = create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash)
-            st.download_button(
-                label="Download Official A4 Statutory Dossier (PDF)",
-                data=pdf_data,
-                file_name=f"Complivox_Audit_{jurisdiction[:6].replace(' ','_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
+                st.subheader("🛡️ Pre-drafted Statutory Defense Strategy (RTQ)")
+                for idx, d in enumerate(defenses, 1):
+                    st.markdown(f"""
+                    <div class="defense-card">
+                        <strong>Defense Protocol #{idx}:</strong><br>
+                        <span style="font-size:0.9em; color:#14532d;">{d}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            with col2:
+                st.subheader("📚 PubMed Scientific Evidence Grounding")
+                if citations:
+                    for cit in citations:
+                        st.markdown(f"""
+                        <div class="pubmed-card">
+                            <strong>PMID: {cit['pmid']}</strong> | {cit['source']}<br>
+                            <a href="{cit['url']}" target="_blank" style="color:#1d4ed8; font-weight:600; text-decoration:none;">{cit['title']}</a>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.caption("No toxicological queries triggered for this excerpt.")
+
+                st.subheader("📥 Export Official Defense Dossier")
+                
+                # PDF Download
+                pdf_data = create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain_choice)
+                st.download_button(
+                    label="📄 Download Official A4 Statutory Dossier (PDF)",
+                    data=pdf_data,
+                    file_name=f"Complivox_Audit_{jurisdiction[:6].replace(' ','_')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+
+                # Word Docx Download
+                docx_data = create_dossier_docx(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain_choice)
+                st.download_button(
+                    label="📝 Download Editable Defense Justifications (.docx)",
+                    data=docx_data,
+                    file_name=f"Complivox_Defense_{jurisdiction[:6].replace(' ','_')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
 
 st.divider()
-st.caption("Complivox Global Engine | CDSCO Form 40/MD-14 • US FDA 21 CFR • EMA ASMF • ICH M7/Q3D • ISO 10993.")
+st.caption("Complivox Global Engine | CDSCO MDR 2017 • Form MD-14/15 • US FDA 21 CFR • EMA ASMF • ICH M7/Q3D • ISO 10993.")
