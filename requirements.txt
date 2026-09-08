@@ -4,3 +4,4 @@ requests
 fpdf2
 pypdf
 python-docx
+google-genai
