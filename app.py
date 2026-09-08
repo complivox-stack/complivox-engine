@@ -11,15 +11,15 @@ from docx import Document
 from google import genai
 from google.genai import types
 
-# --- Page Setup ---
+# --- Enterprise Page Configuration ---
 st.set_page_config(
-    page_title="Complivox Global | Regulatory Intelligence Engine",
+    page_title="Complivox Global | Regulatory Scrutiny Engine",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- Enterprise CSS Styling ---
+# --- Enterprise Interface Styling ---
 st.markdown("""
 <style>
     .main { background-color: #f8fafc; }
@@ -73,7 +73,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Dynamic Local Repository Scanner ---
+# --- Dynamic Statutory Grounding Engine ---
 @st.cache_data(show_spinner=False)
 def scan_repository_knowledge():
     detected_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
@@ -89,7 +89,7 @@ def scan_repository_knowledge():
 
 local_statutes = scan_repository_knowledge()
 
-# --- Universal Filing Taxonomy ---
+# --- Universal Regulatory Pathway Catalog ---
 pathways_catalog = {
     "💊 Pharmaceuticals & Formulations": {
         "India (CDSCO & SUGAM)": [
@@ -134,36 +134,30 @@ pathways_catalog = {
 }
 
 # --- Sidebar Controls ---
-st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=60)
+st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=56)
 st.sidebar.title("Complivox Global")
 st.sidebar.caption("Enterprise Regulatory Intelligence Engine")
 
-domain_choice = st.sidebar.radio("Product Category:", list(pathways_catalog.keys()))
+domain_choice = st.sidebar.radio("Target Regulated Domain:", list(pathways_catalog.keys()))
 active_jurisdictions = pathways_catalog[domain_choice]
 
-jurisdiction = st.sidebar.selectbox("Target Regulatory Body", list(active_jurisdictions.keys()))
-filing_type = st.sidebar.selectbox("Filing Pathway", active_jurisdictions[jurisdiction])
+jurisdiction = st.sidebar.selectbox("Target Regulatory Authority:", list(active_jurisdictions.keys()))
+filing_type = st.sidebar.selectbox("Statutory Pathway:", active_jurisdictions[jurisdiction])
 
-# Global API Key Resolution
-env_api_key = st.secrets.get("GEMINI_API_KEY", "")
-user_api_key = st.sidebar.text_input(
-    "🔑 Google Gemini API Key",
-    value=env_api_key,
-    type="password",
-    help="AI Studio se li hui free key yahan paste karein."
-)
+# Pure Backend Secret Key Resolution (No frontend input exposed)
+api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 st.sidebar.divider()
-st.sidebar.markdown(f"**Linked Repository Statutes ({len(local_statutes)}):**")
+st.sidebar.markdown(f"**Linked Statutory Instruments ({len(local_statutes)}):**")
 for item in local_statutes[:5]:
-    st.sidebar.markdown(f"<span class='statute-tag'>Active</span> {item['display'][:35]}...", unsafe_allow_html=True)
+    st.sidebar.markdown(f"<span class='statute-tag'>Active</span> {item['display'][:34]}...", unsafe_allow_html=True)
 
 if len(local_statutes) > 5:
-    st.sidebar.caption(f"+ {len(local_statutes) - 5} additional statutory gazettes indexed.")
+    st.sidebar.caption(f"+ {len(local_statutes) - 5} additional statutory circulars indexed.")
 
 st.sidebar.divider()
-st.sidebar.markdown("**🔒 Zero-Data Retention**")
-st.sidebar.caption("Volatile memory processing only. Complies with 21 CFR Part 11 & GAMP 5.")
+st.sidebar.markdown("**🔒 Zero-Data Retention SLA Active**")
+st.sidebar.caption("Processing executed strictly in volatile memory. Compliant with 21 CFR Part 11 & GAMP 5 data integrity standards.")
 
 # --- PubMed Evidence Fetcher ---
 @st.cache_data(show_spinner=False, ttl=3600)
@@ -197,7 +191,7 @@ def fetch_pubmed_citations(query_term, max_results=1):
         }]
     return citations
 
-# --- Cognitive AI Scrutiny Engine ---
+# --- Scrutiny Execution Router ---
 def execute_statutory_scrutiny(text, jurisdiction, filing_type, domain, api_key, statutes):
     statute_context_list = [s['display'] for s in statutes]
     statutes_joined = "; ".join(statute_context_list)
@@ -206,31 +200,31 @@ def execute_statutory_scrutiny(text, jurisdiction, filing_type, domain, api_key,
         try:
             client = genai.Client(api_key=api_key)
             prompt = f"""
-You are the Chief Regulatory Auditor for Complivox Global.
-Evaluate this submission for {jurisdiction} ({filing_type}) under domain {domain}.
+You are the Principal Regulatory Auditor and Subject Expert Committee (SEC) Advisor for Complivox Global.
+Evaluate this dossier submission for {jurisdiction} ({filing_type}) within the {domain} domain.
 
-Repository Grounding Context:
-Indexed circulars available: {statutes_joined}. Cite these specifically where relevant.
+Statutory Instruments Grounding:
+The engine maintains these indexed circulars: {statutes_joined}. Cite these precisely where relevant.
 
-Scrutiny Directives:
-- For Pharmaceuticals: Check Zone IVb stability per G.S.R. 1337(E), ICH M7 nitrosamine purge evaluation, ICH Q3D elemental impurities, and ICH Q3C residual solvents.
-- For Medical Devices: Check MDR 2017 Fourth Schedule Part A & B, Free Sale Certificate apostille validity per G.S.R. 754(E), ISO 13485:2016 scope, ISO 10993 biocompatibility matrix, and 510(k) predicate comparison.
+Statutory Directives:
+- Pharmaceuticals: Rigorously audit Zone IVb stability per CDSCO G.S.R. 1337(E), ICH M7 nitrosamine purge evaluation, ICH Q3D elemental impurities (ICP-MS), and ICH Q3C residual solvents.
+- Medical Devices: Rigorously audit MDR 2017 Fourth Schedule Part A & B, Free Sale Certificate apostille status per G.S.R. 754(E), ISO 13485:2016 scope coverage, ISO 10993 biocompatibility matrix, and 510(k) predicate equivalence rationale.
 
-Return ONLY a valid JSON object matching:
+Return ONLY a valid JSON object strictly matching this schema:
 {{
   "score": <integer from 10 to 100>,
   "objections": [
-    {{"code": "<Rule Code>", "rule": "<Statutory Guideline / Gazette>", "issue": "<Detailed Deficiency Description>"}}
+    {{"code": "<Rule Code>", "rule": "<Statutory Guideline / Gazette Reference>", "issue": "<Deficiency Details>"}}
   ],
   "defenses": [
-    "<Step-by-step regulatory Response to Query (RTQ) justification>"
+    "<Authoritative legal and scientific Response to Query (RTQ) justification>"
   ],
   "pubmed_queries": [
-    "<Scientific search query>"
+    "<Scientific toxicology search term>"
   ]
 }}
 
-Submission Dossier Text:
+Submission Dossier Excerpt:
 \"\"\"{text}\"\"\"
 """
             response = client.models.generate_content(
@@ -245,7 +239,7 @@ Submission Dossier Text:
 
     return execute_fallback_heuristics(text, jurisdiction, filing_type, domain)
 
-# --- Built-In Fallback Heuristics ---
+# --- Built-In Heuristic Fallback Engine ---
 def execute_fallback_heuristics(text, jurisdiction, filing_type, domain):
     content = text.lower()
     objections = []
@@ -258,24 +252,24 @@ def execute_fallback_heuristics(text, jurisdiction, filing_type, domain):
             objections.append({
                 "code": "CDSCO-MDR-FSC-01",
                 "rule": "Medical Device Rules 2017 / G.S.R. 754(E) Fourth Schedule",
-                "issue": "Missing Apostilled Free Sale Certificate (FSC) from National Regulatory Authority of country of origin."
+                "issue": "Missing Apostilled/Consularized Free Sale Certificate (FSC) issued by National Regulatory Authority of origin."
             })
-            defenses.append("Furnish authenticated Apostilled Free Sale Certificate from reference agency (US FDA CFS / EU CE Certificate).")
+            defenses.append("Furnish authenticated Apostilled Free Sale Certificate from recognized reference body (US FDA CFS / EU CE Certificate).")
             score -= 25
 
         if not any(k in content for k in ["iso 13485", "qms"]):
             objections.append({
                 "code": "CDSCO-MDR-QMS-02",
                 "rule": "MDR 2017 Rule 34 / ISO 13485:2016 Compliance",
-                "issue": "Evidence of ISO 13485:2016 certification covering the manufacturing premises not provided."
+                "issue": "Valid Notified Body ISO 13485:2016 certification covering the legal manufacturing premises not documented."
             })
-            defenses.append("Submit valid Notified Body accredited ISO 13485:2016 certificate covering the audited manufacturing site.")
+            defenses.append("Submit valid Notified Body accredited ISO 13485:2016 certificate covering the audited manufacturing facility.")
             score -= 20
 
         if not any(k in content for k in ["iso 10993", "biocompatibility", "cytotoxicity"]):
             objections.append({
                 "code": "DEV-BIO-03",
-                "rule": "ISO 10993-1:2018 / Biocompatibility Matrix",
+                "rule": "ISO 10993-1:2018 / Medical Device Biocompatibility Matrix",
                 "issue": "Biological evaluation endpoints (cytotoxicity, systemic toxicity, sensitization) not documented."
             })
             defenses.append("Submit GLP-compliant biological safety evaluation test reports as per ISO 10993-1:2018.")
@@ -287,9 +281,9 @@ def execute_fallback_heuristics(text, jurisdiction, filing_type, domain):
                 objections.append({
                     "code": "CDSCO-STAB-01",
                     "rule": "CDSCO G.S.R. 1337(E) Stability Guidelines",
-                    "issue": "Missing Zone IVb (30 deg C +/- 2 deg C / 75% RH +/- 5% RH) real-time stability submission for Indian climate."
+                    "issue": "Missing Zone IVb (30 deg C +/- 2 deg C / 75% RH +/- 5% RH) real-time stability data. Submission relies solely on Zone II."
                 })
-                defenses.append("Submit 6-month accelerated stability data coupled with Zone IVb 12-month real-time commitment protocol.")
+                defenses.append("Submit 6-month accelerated testing data supported by a formal statutory commitment for 12-month Zone IVb real-time study.")
                 score -= 30
 
         if not any(k in content for k in ["nitrosamine", "ich m7", "purge", "ndma"]):
@@ -298,7 +292,7 @@ def execute_fallback_heuristics(text, jurisdiction, filing_type, domain):
                 "rule": "ICH M7(R1) / US FDA Nitrosamine Guidance",
                 "issue": "Absence of Nitrosamine Drug-Substance purge ratio evaluation and acceptable intake limit calculation."
             })
-            defenses.append("Provide Option 4 purge calculation establishing theoretical maximum nitrosamine contamination is below 18 ng/day threshold.")
+            defenses.append("Provide Option 4 purge justification establishing theoretical maximum nitrosamine contamination is below 18 ng/day threshold.")
             pubmed_queries.append("nitrosamine impurity risk assessment pharmaceuticals")
             score -= 25
 
@@ -314,14 +308,13 @@ def execute_fallback_heuristics(text, jurisdiction, filing_type, domain):
 
     return max(score, 10), objections, defenses, pubmed_queries
 
-# --- Clean Text Helper ---
+# --- Document Serialization Utilities ---
 def clean_for_export(t: str) -> str:
     reps = {"°": " deg ", "±": "+/-", "—": "-", "–": "-", "“": '"', "”": '"', "’": "'", "‘": "'"}
     for k, v in reps.items():
         t = t.replace(k, v)
     return t.encode("latin-1", "replace").decode("latin-1")
 
-# --- PDF Generation Class ---
 class ComplivoxPDF(FPDF):
     def header(self):
         self.set_fill_color(15, 23, 42)
@@ -336,7 +329,7 @@ class ComplivoxPDF(FPDF):
         self.set_y(-12)
         self.set_font("Helvetica", 'I', 7)
         self.set_text_color(148, 163, 184)
-        self.cell(0, 6, "Confidential - SEC & Statutory Defense Dossier | Complivox Enterprise Platform", align='C')
+        self.cell(0, 6, "Confidential - Pre-Submission Regulatory Scrutiny Audit | Complivox Platform", align='C')
 
 def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain):
     pdf = ComplivoxPDF(format='A4')
@@ -346,16 +339,17 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
 
     pdf.set_font("Helvetica", 'B', 12)
     pdf.set_text_color(15, 23, 42)
-    pdf.cell(0, 7, clean_for_export(f"Executive Statutory Audit: {domain.split(' ')[1]}"), ln=True)
+    clean_domain = domain.replace("💊", "").replace("🩺", "").strip()
+    pdf.cell(0, 7, clean_for_export(f"Executive Statutory Audit: {clean_domain}"), ln=True)
 
     pdf.set_font("Helvetica", '', 8)
     pdf.set_text_color(100, 116, 139)
     current_time = datetime.now(timezone.utc).strftime('%d-%b-%Y %H:%M UTC')
-    pdf.cell(0, 4, clean_for_export(f"Target Authority: {jurisdiction} | Pathway: {filing_type} | Date: {current_time}"), ln=True)
+    pdf.cell(0, 4, clean_for_export(f"Target Authority: {jurisdiction} | Pathway: {filing_type} | Generated: {current_time}"), ln=True)
     pdf.cell(0, 4, f"Audit Hash (SHA-256): {file_hash[:32]}...", ln=True)
     pdf.ln(3)
 
-    # Score Box
+    # Score Metrics Box
     current_y = pdf.get_y()
     pdf.set_fill_color(241, 245, 249)
     pdf.rect(12, current_y, 186, 11, 'F')
@@ -398,7 +392,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
         pdf.multi_cell(186, 3.8, clean_for_export(f"{idx}. {d}"))
         pdf.ln(1)
 
-    # PubMed
+    # PubMed Literature Evidence
     if citations:
         pdf.ln(2)
         pdf.set_font("Helvetica", 'B', 9)
@@ -417,16 +411,16 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
     out = pdf.output()
     return bytes(out) if not isinstance(out, bytes) else out
 
-# --- Word (.docx) Generation ---
 def create_dossier_docx(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain):
     doc = Document()
     doc.add_heading("COMPLIVOX GLOBAL | STATUTORY DEFENSE DOSSIER", level=0)
     
+    clean_domain = domain.replace("💊", "").replace("🩺", "").strip()
     p = doc.add_paragraph()
-    p.add_run(f"Domain: {domain}\n").bold = True
-    p.add_run(f"Target Body: {jurisdiction} | Pathway: {filing_type}\n")
+    p.add_run(f"Domain: {clean_domain}\n").bold = True
+    p.add_run(f"Target Authority: {jurisdiction} | Pathway: {filing_type}\n")
     p.add_run(f"Audit Hash (SHA-256): {file_hash}\n")
-    p.add_run(f"Readiness Score: {score}/100 | Status: {'Defensible' if score >= 70 else 'Deficit Flagged'}\n")
+    p.add_run(f"Defense Readiness: {score}/100 | Status: {'Defensible' if score >= 70 else 'Deficit Flagged'}\n")
 
     doc.add_heading("1. Flagged Committee Objections (Anticipated Deficiencies)", level=1)
     for obj in objections:
@@ -434,12 +428,12 @@ def create_dossier_docx(score, objections, defenses, citations, jurisdiction, fi
         p_obj.add_run(f"[{obj.get('code','DEF')}] {obj.get('rule','')}\n").bold = True
         p_obj.add_run(f"Deficiency: {obj.get('issue','')}")
 
-    doc.add_heading("2. Statutory Defense Strategy (Response to Queries - RTQ)", level=1)
+    doc.add_heading("2. Pre-Emptive Defense Protocols (Response to Queries - RTQ)", level=1)
     for idx, d in enumerate(defenses, 1):
         doc.add_paragraph(f"{idx}. {d}")
 
     if citations:
-        doc.add_heading("3. Clinical & Toxicological Literature (PubMed Grounding)", level=1)
+        doc.add_heading("3. Toxicological & Clinical Evidence (PubMed Grounding)", level=1)
         for cit in citations:
             doc.add_paragraph(f"PMID: {cit['pmid']} - {cit['title']} ({cit['source']})")
 
@@ -447,34 +441,34 @@ def create_dossier_docx(score, objections, defenses, citations, jurisdiction, fi
     doc.save(file_stream)
     return file_stream.getvalue()
 
-# --- Main App Header ---
+# --- Main Application Header ---
 st.markdown(f"""
 <div class="hero-box">
-    <h2 style="margin:0; font-size: 1.7rem;">Complivox Global | Statutory Defense Engine</h2>
+    <h2 style="margin:0; font-size: 1.7rem;">Complivox Global | Regulatory Scrutiny Engine</h2>
     <p style="margin:6px 0 0 0; color: #cbd5e1; font-size: 0.95rem;">
-        Autonomous pre-submission scrutiny for CDSCO (MD-14/15, Form 40), US FDA (510k, ANDA) & EMA dossiers. Backed by {len(local_statutes)} statutory gazette circulars.
+        Autonomous pre-submission audit for CDSCO (MD-14/15, Form 40), US FDA (510k, ANDA) & EMA dossiers. Backed by {len(local_statutes)} statutory gazette instruments.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# 3-Step Bar
+# 3-Step Execution Scaffolding
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown('<div class="guide-step"><strong>Step 1: Category</strong><br><span style="font-size:0.85em;">Medicines or Devices</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 1: Classification</strong><br><span style="font-size:0.85em;">Select Domain & Authority</span></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown('<div class="guide-step"><strong>Step 2: Input Context</strong><br><span style="font-size:0.85em;">Drop PDF / Sample Text</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 2: Input Submission</strong><br><span style="font-size:0.85em;">Upload PDF / Excerpt</span></div>', unsafe_allow_html=True)
 with c3:
-    st.markdown('<div class="guide-step"><strong>Step 3: Export Defense</strong><br><span style="font-size:0.85em;">Download PDF + Word</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 3: Export Dossier</strong><br><span style="font-size:0.85em;">Generate PDF & Word (.docx)</span></div>', unsafe_allow_html=True)
 
 st.write("")
 
-# File Ingestion / Text Input
-input_mode = st.radio("Submission Context Input:", ["Live Demonstration Excerpt", "Upload Technical Dossier (PDF)"], horizontal=True)
+# Context Selection Mode
+input_mode = st.radio("Submission Context Input Mode:", ["Live Demonstration Excerpt", "Upload Technical Dossier (PDF)"], horizontal=True)
 
 active_text = ""
 
 if input_mode == "Upload Technical Dossier (PDF)":
-    uploaded_pdf = st.file_uploader("Upload technical DMF excerpt, COA, or Device Master File (PDF)", type=["pdf"])
+    uploaded_pdf = st.file_uploader("Upload technical DMF excerpt, Certificate of Analysis, or Device Master File (PDF)", type=["pdf"])
     if uploaded_pdf:
         try:
             reader = PdfReader(uploaded_pdf)
@@ -482,7 +476,7 @@ if input_mode == "Upload Technical Dossier (PDF)":
                 extracted = page.extract_text()
                 if extracted:
                     active_text += extracted + "\n"
-            st.success(f"Extracted {len(reader.pages)} page(s) successfully from {uploaded_pdf.name}")
+            st.success(f"Parsed {len(reader.pages)} page(s) successfully from {uploaded_pdf.name}")
         except Exception as err:
             st.error(f"Error reading PDF: {err}")
 else:
@@ -495,31 +489,31 @@ else:
 
 st.write("")
 
-# --- Audit Execution Trigger ---
+# --- Scrutiny Execution Trigger ---
 if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_container_width=True):
     if not active_text.strip():
-        st.warning("Please provide submission text or upload a PDF first.")
+        st.warning("Please provide technical submission text or upload a dossier PDF.")
     else:
-        with st.spinner("Analyzing statutory gap matrix against CDSCO circulars & querying NCBI PubMed..."):
+        with st.spinner("Executing statutory matrix analysis against CDSCO gazettes & NCBI PubMed..."):
             file_hash = hashlib.sha256(active_text.encode("utf-8")).hexdigest()
             score, objections, defenses, pubmed_queries = execute_statutory_scrutiny(
-                active_text, jurisdiction, filing_type, domain_choice, user_api_key, local_statutes
+                active_text, jurisdiction, filing_type, domain_choice, api_key, local_statutes
             )
             
             citations = []
             for q in pubmed_queries[:2]:
                 citations.extend(fetch_pubmed_citations(q, max_results=1))
 
-            # Metrics
+            # Metric Scorecards
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Statutory Readiness", f"{score} / 100", delta=f"{score - 100} Deficit", delta_color="inverse")
+            m1.metric("Defense Readiness", f"{score} / 100", delta=f"{score - 100} Deficit", delta_color="inverse")
             m2.metric("Committee Objections", len(objections))
             m3.metric("Defensive RTQ Protocols", len(defenses))
             m4.metric("Live PubMed Evidence", len(citations))
 
             st.divider()
 
-            # Detailed Output
+            # Detailed Output Layout
             col1, col2 = st.columns([1.1, 0.9])
 
             with col1:
@@ -532,7 +526,7 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
                     </div>
                     """, unsafe_allow_html=True)
 
-                st.subheader("🛡️ Pre-drafted Statutory Defense Strategy (RTQ)")
+                st.subheader("🛡️ Pre-Emptive Statutory Defense Strategy (RTQ)")
                 for idx, d in enumerate(defenses, 1):
                     st.markdown(f"""
                     <div class="defense-card">
@@ -556,7 +550,7 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
 
                 st.subheader("📥 Export Official Defense Dossier")
                 
-                # PDF Download
+                # PDF Dossier Export
                 pdf_data = create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain_choice)
                 st.download_button(
                     label="📄 Download Official A4 Statutory Dossier (PDF)",
@@ -566,10 +560,10 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
                     use_container_width=True
                 )
 
-                # Word Docx Download
+                # Word Dossier Export
                 docx_data = create_dossier_docx(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain_choice)
                 st.download_button(
-                    label="📝 Download Editable Defense Justifications (.docx)",
+                    label="📝 Download Editable Defense Protocols (.docx)",
                     data=docx_data,
                     file_name=f"Complivox_Defense_{jurisdiction[:6].replace(' ','_')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -577,4 +571,4 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
                 )
 
 st.divider()
-st.caption("Complivox Global Engine | CDSCO MDR 2017 • Form MD-14/15 • US FDA 21 CFR • EMA ASMF • ICH M7/Q3D • ISO 10993.")
+st.caption("Complivox Global Platform | CDSCO MDR 2017 • Form MD-14/15 • US FDA 21 CFR • EMA ASMF • ICH M7/Q3D • ISO 10993.")
