@@ -144,7 +144,7 @@ active_jurisdictions = pathways_catalog[domain_choice]
 jurisdiction = st.sidebar.selectbox("Target Regulatory Authority:", list(active_jurisdictions.keys()))
 filing_type = st.sidebar.selectbox("Statutory Pathway:", active_jurisdictions[jurisdiction])
 
-# Pure Backend Secret Key Resolution (No frontend input exposed)
+# Pure Backend Secret Key Resolution
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 st.sidebar.divider()
@@ -308,109 +308,117 @@ def execute_fallback_heuristics(text, jurisdiction, filing_type, domain):
 
     return max(score, 10), objections, defenses, pubmed_queries
 
-# --- Document Serialization Utilities ---
+# --- Clean Text Helper ---
 def clean_for_export(t: str) -> str:
     reps = {"°": " deg ", "±": "+/-", "—": "-", "–": "-", "“": '"', "”": '"', "’": "'", "‘": "'"}
     for k, v in reps.items():
         t = t.replace(k, v)
     return t.encode("latin-1", "replace").decode("latin-1")
 
+# --- Production Multi-Page PDF Engine with Margin Fix ---
 class ComplivoxPDF(FPDF):
     def header(self):
         self.set_fill_color(15, 23, 42)
-        self.rect(0, 0, 210, 16, 'F')
-        self.set_font("Helvetica", 'B', 10)
+        # Black top header bar
+        self.rect(0, 0, 210, 14, 'F')
+        self.set_font("Helvetica", 'B', 9)
         self.set_text_color(255, 255, 255)
-        self.set_xy(12, 4)
-        self.cell(186, 8, "COMPLIVOX GLOBAL | STATUTORY PRE-SUBMISSION DEFENSE DOSSIER")
-        self.ln(10)
+        self.set_xy(14, 3)
+        self.cell(182, 8, "COMPLIVOX GLOBAL | STATUTORY PRE-SUBMISSION DEFENSE DOSSIER", align='L')
+        # Space below black bar
+        self.set_y(22)
 
     def footer(self):
         self.set_y(-12)
-        self.set_font("Helvetica", 'I', 7)
+        self.set_font("Helvetica", 'I', 8)
         self.set_text_color(148, 163, 184)
-        self.cell(0, 6, "Confidential - Pre-Submission Regulatory Scrutiny Audit | Complivox Platform", align='C')
+        self.cell(0, 6, f"Confidential Regulatory Scrutiny Audit | Page {self.page_no()}/{{nb}}", align='C')
 
 def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain):
     pdf = ComplivoxPDF(format='A4')
-    pdf.set_margins(12, 18, 12)
+    pdf.alias_nb_pages()
+    pdf.set_margins(14, 22, 14)
     pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=16)
 
+    # Document Header Title (Safe vertical spacing below header bar)
+    pdf.set_y(22)
     pdf.set_font("Helvetica", 'B', 12)
     pdf.set_text_color(15, 23, 42)
     clean_domain = domain.replace("💊", "").replace("🩺", "").strip()
-    pdf.cell(0, 7, clean_for_export(f"Executive Statutory Audit: {clean_domain}"), ln=True)
+    pdf.cell(182, 7, clean_for_export(f"Executive Statutory Audit: {clean_domain}"), ln=True)
 
+    # Metadata Details
     pdf.set_font("Helvetica", '', 8)
     pdf.set_text_color(100, 116, 139)
     current_time = datetime.now(timezone.utc).strftime('%d-%b-%Y %H:%M UTC')
-    pdf.cell(0, 4, clean_for_export(f"Target Authority: {jurisdiction} | Pathway: {filing_type} | Generated: {current_time}"), ln=True)
-    pdf.cell(0, 4, f"Audit Hash (SHA-256): {file_hash[:32]}...", ln=True)
-    pdf.ln(3)
+    pdf.cell(182, 4.5, clean_for_export(f"Target Authority: {jurisdiction} | Pathway: {filing_type}"), ln=True)
+    pdf.cell(182, 4.5, clean_for_export(f"Generated: {current_time} | Audit Hash: {file_hash[:28]}..."), ln=True)
+    pdf.ln(4)
 
-    # Score Metrics Box
+    # Readiness Score Box
     current_y = pdf.get_y()
     pdf.set_fill_color(241, 245, 249)
-    pdf.rect(12, current_y, 186, 11, 'F')
+    pdf.rect(14, current_y, 182, 10, 'F')
     pdf.set_font("Helvetica", 'B', 8.5)
     pdf.set_text_color(15, 23, 42)
-    pdf.set_xy(15, current_y + 2)
-    pdf.cell(85, 7, f"Statutory Defense Readiness: {score}/100")
-    pdf.set_xy(105, current_y + 2)
-    status_str = "STATUS: ACTION REQUIRED (HIGH QUERY DEFICIT)" if score < 70 else "STATUS: STATUTORILY DEFENSIBLE"
-    pdf.cell(90, 7, status_str, align='R')
-    pdf.set_xy(12, current_y + 14)
+    pdf.set_xy(16, current_y + 1)
+    pdf.cell(90, 8, f"Statutory Defense Readiness: {score}/100")
+    pdf.set_xy(106, current_y + 1)
+    status_str = "STATUS: ACTION REQUIRED" if score < 70 else "STATUS: STATUTORILY DEFENSIBLE"
+    pdf.cell(86, 8, status_str, align='R')
+    pdf.set_xy(14, current_y + 14)
 
-    # Objections
+    # Objections Section
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(185, 28, 28)
-    pdf.cell(0, 5, "FLAGGED STATUTORY GAPS & ANTICIPATED COMMITTEE OBJECTIONS", ln=True)
+    pdf.cell(182, 5, "FLAGGED STATUTORY GAPS & ANTICIPATED COMMITTEE OBJECTIONS", ln=True)
     pdf.set_draw_color(226, 232, 240)
-    pdf.line(12, pdf.get_y(), 198, pdf.get_y())
+    pdf.line(14, pdf.get_y(), 196, pdf.get_y())
     pdf.ln(2)
 
     for obj in objections:
         pdf.set_font("Helvetica", 'B', 8)
         pdf.set_text_color(30, 41, 59)
-        pdf.cell(0, 4, clean_for_export(f"[{obj.get('code','DEF')}] {obj.get('rule','Statutory Rule')}"), ln=True)
+        pdf.multi_cell(182, 4, clean_for_export(f"[{obj.get('code','DEF')}] {obj.get('rule','Statutory Rule')}"))
         pdf.set_font("Helvetica", '', 7.5)
-        pdf.multi_cell(186, 3.8, clean_for_export(f"Deficiency: {obj.get('issue','')}"))
-        pdf.ln(1)
+        pdf.multi_cell(182, 4, clean_for_export(f"Deficiency: {obj.get('issue','')}"))
+        pdf.ln(2)
 
-    pdf.ln(2)
-    # Defenses
+    # Defenses Section
+    pdf.ln(1)
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(22, 101, 52)
-    pdf.cell(0, 5, "PRE-EMPTIVE STATUTORY DEFENSE STRATEGY (RTQ PROTOCOLS)", ln=True)
-    pdf.line(12, pdf.get_y(), 198, pdf.get_y())
+    pdf.cell(182, 5, "PRE-EMPTIVE STATUTORY DEFENSE STRATEGY (RTQ PROTOCOLS)", ln=True)
+    pdf.line(14, pdf.get_y(), 196, pdf.get_y())
     pdf.ln(2)
 
     for idx, d in enumerate(defenses, 1):
         pdf.set_font("Helvetica", '', 7.5)
         pdf.set_text_color(30, 41, 59)
-        pdf.multi_cell(186, 3.8, clean_for_export(f"{idx}. {d}"))
-        pdf.ln(1)
+        pdf.multi_cell(182, 4, clean_for_export(f"{idx}. {d}"))
+        pdf.ln(1.5)
 
-    # PubMed Literature Evidence
+    # PubMed Section
     if citations:
         pdf.ln(2)
         pdf.set_font("Helvetica", 'B', 9)
         pdf.set_text_color(30, 58, 138)
-        pdf.cell(0, 5, "NCBI / PUBMED CLINICAL & TOXICOLOGICAL CITATIONS", ln=True)
-        pdf.line(12, pdf.get_y(), 198, pdf.get_y())
+        pdf.cell(182, 5, "NCBI / PUBMED CLINICAL & TOXICOLOGICAL CITATIONS", ln=True)
+        pdf.line(14, pdf.get_y(), 196, pdf.get_y())
         pdf.ln(2)
         for cit in citations:
-            pdf.set_font("Helvetica", 'B', 7)
+            pdf.set_font("Helvetica", 'B', 7.5)
             pdf.set_text_color(30, 41, 59)
-            pdf.cell(0, 3.5, clean_for_export(f"PMID {cit['pmid']} | {cit['source']}"), ln=True)
+            pdf.cell(182, 4, clean_for_export(f"PMID {cit['pmid']} | {cit['source']}"), ln=True)
             pdf.set_font("Helvetica", '', 7)
-            pdf.multi_cell(186, 3.5, clean_for_export(f"Title: {cit['title']}"))
-            pdf.ln(1)
+            pdf.multi_cell(182, 3.8, clean_for_export(f"Title: {cit['title']}"))
+            pdf.ln(1.5)
 
     out = pdf.output()
     return bytes(out) if not isinstance(out, bytes) else out
 
+# --- Word (.docx) Generation ---
 def create_dossier_docx(score, objections, defenses, citations, jurisdiction, filing_type, file_hash, domain):
     doc = Document()
     doc.add_heading("COMPLIVOX GLOBAL | STATUTORY DEFENSE DOSSIER", level=0)
