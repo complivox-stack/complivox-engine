@@ -3,7 +3,6 @@ import requests
 import hashlib
 import json
 import io
-import os
 from datetime import datetime, timezone
 from fpdf import FPDF
 from pypdf import PdfReader
@@ -19,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Enterprise Interface Styling (Enforced Dark/Light Contrast) ---
+# --- Enterprise Interface Styling ---
 st.markdown("""
 <style>
     .main { background-color: #f8fafc; }
@@ -30,12 +29,8 @@ st.markdown("""
         border-radius: 12px;
         margin-bottom: 20px;
     }
-    .hero-box h2 {
-        color: #ffffff !important;
-    }
-    .hero-box p {
-        color: #cbd5e1 !important;
-    }
+    .hero-box h2 { color: #ffffff !important; }
+    .hero-box p { color: #cbd5e1 !important; }
     .guide-step {
         background: #ffffff !important;
         color: #0f172a !important;
@@ -98,22 +93,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Dynamic Statutory Grounding Engine ---
-@st.cache_data(show_spinner=False)
-def scan_repository_knowledge():
-    detected_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
-    statutory_context = []
-    
-    for f in detected_files:
-        clean_name = f.replace(".pdf", "").replace("_", " ").strip()
-        statutory_context.append({
-            "filename": f,
-            "display": clean_name
-        })
-    return statutory_context
-
-local_statutes = scan_repository_knowledge()
-
 # --- Universal Regulatory Pathway Catalog ---
 pathways_catalog = {
     "💊 Pharmaceuticals & Formulations": {
@@ -158,7 +137,7 @@ pathways_catalog = {
     }
 }
 
-# Dynamic Statutory Catalog Mapping
+# --- Dynamic Authority Statutory Grounding Matrix ---
 statutory_mapping = {
     "India (CDSCO & SUGAM)": [
         "Drugs and Cosmetics Act, 1940 & Rules 1945",
@@ -230,10 +209,10 @@ api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 st.sidebar.divider()
 
-# Dynamic Authority Instrument Resolution
-displayed_instruments = statutory_mapping.get(jurisdiction, statutory_mapping["United States (US FDA)"])
-st.sidebar.markdown(f"**Linked Statutory Instruments ({len(displayed_instruments)}):**")
-for item in displayed_instruments:
+# Strictly Authority-Driven Statutory Instruments
+active_statutes = statutory_mapping.get(jurisdiction, statutory_mapping["United States (US FDA)"])
+st.sidebar.markdown(f"**Linked Statutory Instruments ({len(active_statutes)}):**")
+for item in active_statutes:
     st.sidebar.markdown(f"<span class='statute-tag'>Active</span> {item}", unsafe_allow_html=True)
 
 st.sidebar.divider()
@@ -274,8 +253,7 @@ def fetch_pubmed_citations(query_term, max_results=1):
 
 # --- Scrutiny Execution Router ---
 def execute_statutory_scrutiny(text, jurisdiction, filing_type, domain, api_key, statutes):
-    statute_context_list = [s['display'] for s in statutes]
-    statutes_joined = "; ".join(statute_context_list)
+    statutes_joined = "; ".join(statutes)
 
     if api_key:
         try:
@@ -435,7 +413,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
     pdf.cell(182, 4.5, clean_for_export(f"Generated: {current_time} | Audit Hash: {file_hash[:28]}..."), ln=True)
     pdf.ln(4)
 
-    # Score Box (Strict margin bounds to prevent clipping)
+    # Score Box
     current_y = pdf.get_y()
     pdf.set_fill_color(241, 245, 249)
     pdf.rect(14, current_y, 182, 10, 'F')
@@ -485,7 +463,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
         pdf.multi_cell(182, 4, clean_for_export(f"{idx}. {d}"))
         pdf.ln(2)
 
-    # Section 3: PubMed Citations (Strict Multi-Cell Wrapping)
+    # Section 3: PubMed Citations
     if citations:
         pdf.ln(2)
         pdf.set_x(14)
@@ -549,7 +527,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 3-Step Execution Scaffolding (Mobile Dark-Mode Resistant)
+# 3-Step Execution Scaffolding
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown('<div class="guide-step"><strong>Step 1: Classification</strong><span>Domain & Authority</span></div>', unsafe_allow_html=True)
@@ -595,7 +573,7 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
         with st.spinner("Executing statutory matrix analysis against regulatory gazettes & NCBI PubMed..."):
             file_hash = hashlib.sha256(active_text.encode("utf-8")).hexdigest()
             score, objections, defenses, pubmed_queries = execute_statutory_scrutiny(
-                active_text, jurisdiction, filing_type, domain_choice, api_key, local_statutes
+                active_text, jurisdiction, filing_type, domain_choice, api_key, active_statutes
             )
             
             citations = []
