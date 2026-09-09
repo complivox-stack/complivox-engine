@@ -19,53 +19,78 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Enterprise Interface Styling ---
+# --- Enterprise Interface Styling (Enforced Dark/Light Contrast) ---
 st.markdown("""
 <style>
     .main { background-color: #f8fafc; }
     .hero-box {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        color: #ffffff;
+        color: #ffffff !important;
         padding: 24px;
         border-radius: 12px;
         margin-bottom: 20px;
     }
+    .hero-box h2 {
+        color: #ffffff !important;
+    }
+    .hero-box p {
+        color: #cbd5e1 !important;
+    }
     .guide-step {
-        background: #ffffff;
-        border: 1.5px solid #0284c7;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1.5px solid #0284c7 !important;
         border-radius: 8px;
-        padding: 10px;
+        padding: 10px 8px;
         text-align: center;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        min-height: 64px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .guide-step strong {
+        color: #0f172a !important;
+        font-size: 0.95em;
+        display: block;
+        margin-bottom: 2px;
+    }
+    .guide-step span {
+        color: #475569 !important;
+        font-size: 0.8em !important;
+        display: block;
     }
     .sec-card {
-        background-color: #fef2f2;
-        border-left: 5px solid #dc2626;
+        background-color: #fef2f2 !important;
+        border-left: 5px solid #dc2626 !important;
         padding: 12px 16px;
         border-radius: 6px;
         margin-bottom: 10px;
+        color: #1e293b !important;
     }
     .defense-card {
-        background-color: #f0fdf4;
-        border-left: 5px solid #16a34a;
+        background-color: #f0fdf4 !important;
+        border-left: 5px solid #16a34a !important;
         padding: 12px 16px;
         border-radius: 6px;
         margin-bottom: 10px;
+        color: #1e293b !important;
     }
     .pubmed-card {
-        background-color: #eff6ff;
-        border-left: 5px solid #2563eb;
+        background-color: #eff6ff !important;
+        border-left: 5px solid #2563eb !important;
         padding: 10px 14px;
         border-radius: 6px;
         margin-bottom: 8px;
         font-size: 0.88em;
+        color: #1e293b !important;
     }
     .statute-tag {
-        background-color: #e0f2fe;
-        color: #0369a1;
-        padding: 4px 8px;
+        background-color: #e0f2fe !important;
+        color: #0369a1 !important;
+        padding: 3px 6px;
         border-radius: 4px;
-        font-size: 0.76em;
+        font-size: 0.72em;
         font-weight: 600;
         margin: 2px;
         display: inline-block;
@@ -133,6 +158,62 @@ pathways_catalog = {
     }
 }
 
+# Dynamic Statutory Catalog Mapping
+statutory_mapping = {
+    "India (CDSCO & SUGAM)": [
+        "Drugs and Cosmetics Act, 1940 & Rules 1945",
+        "CDSCO G.S.R. 1337(E) Stability Zone IVb",
+        "SUGAM PSUR Circular Module 3.0",
+        "Form 40 Bulk Drug Master Protocol",
+        "CDSCO Guidance on Nitrosamine Impurities",
+        "SEC Clinical Review Standards (CT-06)"
+    ],
+    "India (CDSCO MDR 2017)": [
+        "MDR G.S.R. 754(E) dt 30.09.2022 (FSC Mandate)",
+        "Medical Device Rules, 2017 (Fourth Schedule)",
+        "ISO 13485:2016 QMS Notified Body Scope",
+        "ISO 10993 Biological Evaluation Matrix",
+        "Form MD-14 / MD-15 Import Regulations",
+        "SUGAM Device Master File (DMF) Norms"
+    ],
+    "United States (US FDA)": [
+        "21 CFR Part 314 (ANDA / NDA Evaluation)",
+        "21 CFR Part 820 / QMSR (Quality System Regulation)",
+        "21 CFR Part 11 (Electronic Records & Audit Trails)",
+        "FDA Guidance: Control of Nitrosamine Impurities",
+        "Section 510(k) Substantial Equivalence Framework",
+        "ICH M7(R1) Assessment of Mutagenic Impurities"
+    ],
+    "Europe (EMA / EDQM)": [
+        "EDQM Technical Guide for CEP Dossiers",
+        "CPMP/QWP/227/02 Rev 3 (ASMF Guideline)",
+        "Directive 2001/83/EC Annex I Dossier Standards",
+        "EMA Article 5(3) Nitrosamine Risk Procedures",
+        "ICH Q3D Elemental Impurities Guidelines",
+        "Ph. Eur. General Monograph 2034"
+    ],
+    "Europe (EU MDR)": [
+        "Regulation (EU) 2017/745 (MDR Annex II & III)",
+        "Regulation (EU) 2017/746 (IVDR General Safety)",
+        "EN ISO 14971:2019 (Risk Management for Devices)",
+        "ISO 10993-1:2018 (Biological Evaluation)",
+        "MDCG Guidance on Clinical Evaluation (MDCG 2020-1)",
+        "MEDDEV 2.7/1 Rev 4 Conformity Guidance"
+    ],
+    "Dual Filing (CDSCO + US FDA)": [
+        "CDSCO G.S.R. 1337(E) & 21 CFR Part 314 Harmonization",
+        "Zone IVb vs Zone II Dual Stability Protocol",
+        "ICH M7 / US FDA Nitrosamine Option 4 Purge",
+        "DMF Type II & SUGAM Electronic Submission Standards"
+    ],
+    "Dual Filing (CDSCO MD-14 + US FDA 510(k))": [
+        "CDSCO MDR 2017 Fourth Schedule & 21 CFR Part 820",
+        "FDA 510(k) Predicate Equivalence Matrix",
+        "Apostilled FSC Compliance under G.S.R. 754(E)",
+        "ISO 10993 Biocompatibility Testing Matrix"
+    ]
+}
+
 # --- Sidebar Controls ---
 st.sidebar.image("https://img.icons8.com/fluency/96/shield.png", width=56)
 st.sidebar.title("Complivox Global")
@@ -148,12 +229,12 @@ filing_type = st.sidebar.selectbox("Statutory Pathway:", active_jurisdictions[ju
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
 st.sidebar.divider()
-st.sidebar.markdown(f"**Linked Statutory Instruments ({len(local_statutes)}):**")
-for item in local_statutes[:5]:
-    st.sidebar.markdown(f"<span class='statute-tag'>Active</span> {item['display'][:34]}...", unsafe_allow_html=True)
 
-if len(local_statutes) > 5:
-    st.sidebar.caption(f"+ {len(local_statutes) - 5} additional statutory circulars indexed.")
+# Dynamic Authority Instrument Resolution
+displayed_instruments = statutory_mapping.get(jurisdiction, statutory_mapping["United States (US FDA)"])
+st.sidebar.markdown(f"**Linked Statutory Instruments ({len(displayed_instruments)}):**")
+for item in displayed_instruments:
+    st.sidebar.markdown(f"<span class='statute-tag'>Active</span> {item}", unsafe_allow_html=True)
 
 st.sidebar.divider()
 st.sidebar.markdown("**🔒 Zero-Data Retention SLA Active**")
@@ -354,20 +435,20 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
     pdf.cell(182, 4.5, clean_for_export(f"Generated: {current_time} | Audit Hash: {file_hash[:28]}..."), ln=True)
     pdf.ln(4)
 
-    # Score Box
+    # Score Box (Strict margin bounds to prevent clipping)
     current_y = pdf.get_y()
     pdf.set_fill_color(241, 245, 249)
     pdf.rect(14, current_y, 182, 10, 'F')
-    pdf.set_font("Helvetica", 'B', 8.5)
+    pdf.set_font("Helvetica", 'B', 8)
     pdf.set_text_color(15, 23, 42)
     pdf.set_xy(16, current_y + 1)
-    pdf.cell(85, 8, f"Statutory Defense Readiness: {score}/100")
-    pdf.set_xy(105, current_y + 1)
-    status_str = "STATUS: ACTION REQUIRED" if score < 70 else "STATUS: STATUTORILY DEFENSIBLE"
-    pdf.cell(88, 8, status_str, align='R')
+    pdf.cell(75, 8, f"Statutory Defense Readiness: {score}/100")
+    pdf.set_xy(92, current_y + 1)
+    status_str = "ACTION REQUIRED" if score < 70 else "STATUTORILY DEFENSIBLE"
+    pdf.cell(102, 8, f"STATUS: {status_str}", align='R')
     pdf.set_y(current_y + 14)
 
-    # Section 1: Flagged Objections (Strict Margin Alignment Fix)
+    # Section 1: Flagged Objections
     pdf.set_x(14)
     pdf.set_font("Helvetica", 'B', 9)
     pdf.set_text_color(185, 28, 28)
@@ -404,7 +485,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
         pdf.multi_cell(182, 4, clean_for_export(f"{idx}. {d}"))
         pdf.ln(2)
 
-    # Section 3: PubMed Citations
+    # Section 3: PubMed Citations (Strict Multi-Cell Wrapping)
     if citations:
         pdf.ln(2)
         pdf.set_x(14)
@@ -417,7 +498,7 @@ def create_dossier_pdf(score, objections, defenses, citations, jurisdiction, fil
             pdf.set_x(14)
             pdf.set_font("Helvetica", 'B', 7.5)
             pdf.set_text_color(30, 41, 59)
-            pdf.cell(182, 4, clean_for_export(f"PMID {cit['pmid']} | {cit['source']}"), ln=True)
+            pdf.multi_cell(182, 4, clean_for_export(f"PMID {cit['pmid']} | {cit['source']}"))
             pdf.set_x(14)
             pdf.set_font("Helvetica", '', 7)
             pdf.set_text_color(71, 85, 105)
@@ -459,23 +540,23 @@ def create_dossier_docx(score, objections, defenses, citations, jurisdiction, fi
     return file_stream.getvalue()
 
 # --- Main Application Header ---
-st.markdown(f"""
+st.markdown("""
 <div class="hero-box">
     <h2 style="margin:0; font-size: 1.7rem;">Complivox Global | Regulatory Scrutiny Engine</h2>
-    <p style="margin:6px 0 0 0; color: #cbd5e1; font-size: 0.95rem;">
-        Autonomous pre-submission audit for CDSCO (MD-14/15, Form 40), US FDA (510k, ANDA) & EMA dossiers. Backed by {len(local_statutes)} statutory gazette instruments.
+    <p style="margin:6px 0 0 0; font-size: 0.95rem;">
+        Autonomous pre-submission audit for CDSCO (MD-14/15, Form 40), US FDA (510k, ANDA) & EMA dossiers. Real-time statutory matrix validation.
     </p>
 </div>
 """, unsafe_allow_html=True)
 
-# 3-Step Execution Scaffolding
+# 3-Step Execution Scaffolding (Mobile Dark-Mode Resistant)
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown('<div class="guide-step"><strong>Step 1: Classification</strong><br><span style="font-size:0.85em;">Select Domain & Authority</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 1: Classification</strong><span>Domain & Authority</span></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown('<div class="guide-step"><strong>Step 2: Input Submission</strong><br><span style="font-size:0.85em;">Upload PDF / Excerpt</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 2: Input Submission</strong><span>PDF / Excerpt</span></div>', unsafe_allow_html=True)
 with c3:
-    st.markdown('<div class="guide-step"><strong>Step 3: Export Dossier</strong><br><span style="font-size:0.85em;">Generate PDF & Word (.docx)</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="guide-step"><strong>Step 3: Export Dossier</strong><span>PDF & Word (.docx)</span></div>', unsafe_allow_html=True)
 
 st.write("")
 
@@ -511,7 +592,7 @@ if st.button("🚀 Run Statutory Scrutiny Audit Now", type="primary", use_contai
     if not active_text.strip():
         st.warning("Please provide technical submission text or upload a dossier PDF.")
     else:
-        with st.spinner("Executing statutory matrix analysis against CDSCO gazettes & NCBI PubMed..."):
+        with st.spinner("Executing statutory matrix analysis against regulatory gazettes & NCBI PubMed..."):
             file_hash = hashlib.sha256(active_text.encode("utf-8")).hexdigest()
             score, objections, defenses, pubmed_queries = execute_statutory_scrutiny(
                 active_text, jurisdiction, filing_type, domain_choice, api_key, local_statutes
